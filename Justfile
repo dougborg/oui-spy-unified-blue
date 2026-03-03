@@ -26,10 +26,13 @@ test:
 
 test-cpp:
     pio test -e native
+    pio test -e native_parser
 
 coverage-cpp:
     pio test -e native
+    pio test -e native_parser
     python3 -m gcovr --root . --txt --print-summary \
+        --fail-under-line 30 \
         --filter src/opendroneid.c \
         --filter src/wifi.c \
         --filter src/modules/detector_logic.cpp \

@@ -53,11 +53,14 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Run native C++ tests
-        run: pio test -e native
+        run: |
+          pio test -e native
+          pio test -e native_parser
 
       - name: Generate native coverage report
         run: |
           python -m gcovr --root . --txt --print-summary \
+            --fail-under-line 30 \
             --filter src/opendroneid.c \
             --filter src/wifi.c \
             --filter src/modules/detector_logic.cpp \

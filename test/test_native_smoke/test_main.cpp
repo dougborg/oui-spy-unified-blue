@@ -9,6 +9,7 @@
 
 extern "C" {
 #include "opendroneid.h"
+#include "odid_wifi.h"
 }
 
 static void seed_basic_uas(ODID_UAS_Data* uas, const char* uas_id) {
@@ -120,6 +121,96 @@ void test_wifi_beacon_builder_rejects_invalid_ssid_len() {
     TEST_ASSERT_LESS_THAN_INT(0, ret);
 }
 
+void test_wifi_process_pack_rejects_truncated_buffer() {
+    ODID_UAS_Data source;
+    seed_basic_uas(&source, "TRUNC-PACK-CHECK-01");
+
+    uint8_t pack[sizeof(ODID_MessagePack_encoded)] = {0};
+    int pack_len = odid_message_build_pack(&source, pack, sizeof(pack));
+    TEST_ASSERT_GREATER_THAN_INT(0, pack_len);
+
+    ODID_UAS_Data decoded;
+    int ret = odid_message_process_pack(&decoded, pack, (size_t)(pack_len - 1));
+    TEST_ASSERT_EQUAL_INT(-12, ret);  // -ENOMEM
+}
+
+void test_wifi_process_pack_rejects_invalid_single_message_size() {
+    ODID_UAS_Data source;
+    seed_basic_uas(&source, "BAD-SIZE-PACK-0001");
+
+    uint8_t pack[sizeof(ODID_MessagePack_encoded)] = {0};
+    int pack_len = odid_message_build_pack(&source, pack, sizeof(pack));
+    TEST_ASSERT_GREATER_THAN_INT(0, pack_len);
+
+    auto* msg_pack = reinterpret_cast<ODID_MessagePack_encoded*>(pack);
+    msg_pack->SingleMessageSize = static_cast<uint8_t>(ODID_MESSAGE_SIZE - 1);
+
+    ODID_UAS_Data decoded;
+    int ret = odid_message_process_pack(&decoded, pack, (size_t)pack_len);
+    TEST_ASSERT_EQUAL_INT(-1, ret);
+}
+
+void test_wifi_nan_action_frame_rejects_wrong_destination() {
+    ODID_UAS_Data source;
+    seed_basic_uas(&source, "NAN-DST-CHECK-0001");
+
+    char tx_mac[6] = {0x02, 0x10, 0x20, 0x30, 0x40, 0x50};
+    uint8_t frame[1024] = {0};
+    int frame_len = odid_wifi_build_message_pack_nan_action_frame(&source, tx_mac, 2, frame,
+                                                                   sizeof(frame));
+    TEST_ASSERT_GREATER_THAN_INT(0, frame_len);
+
+    auto* mgmt = reinterpret_cast<ieee80211_mgmt*>(frame);
+    mgmt->da[0] ^= 0x01;
+
+    ODID_UAS_Data received;
+    char rx_mac[6] = {0};
+    int ret = odid_wifi_receive_message_pack_nan_action_frame(&received, rx_mac, frame,
+                                                              (size_t)frame_len);
+    TEST_ASSERT_EQUAL_INT(-22, ret);  // -EINVAL
+}
+
+void test_wifi_nan_action_frame_rejects_bad_service_info_length() {
+    ODID_UAS_Data source;
+    seed_basic_uas(&source, "NAN-SILEN-CHECK001");
+
+    char tx_mac[6] = {0x02, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE};
+    uint8_t frame[1024] = {0};
+    int frame_len = odid_wifi_build_message_pack_nan_action_frame(&source, tx_mac, 3, frame,
+                                                                   sizeof(frame));
+    TEST_ASSERT_GREATER_THAN_INT(0, frame_len);
+
+    size_t offset = sizeof(ieee80211_mgmt) + sizeof(nan_service_discovery);
+    auto* nsda = reinterpret_cast<nan_service_descriptor_attribute*>(frame + offset);
+    nsda->service_info_length = static_cast<uint8_t>(nsda->service_info_length + 1);
+
+    ODID_UAS_Data received;
+    char rx_mac[6] = {0};
+    int ret = odid_wifi_receive_message_pack_nan_action_frame(&received, rx_mac, frame,
+                                                              (size_t)frame_len);
+    TEST_ASSERT_EQUAL_INT(-22, ret);  // -EINVAL
+}
+
+void test_encode_message_pack_rejects_packed_message_inside_pack() {
+    ODID_MessagePack_data input;
+    odid_initMessagePackData(&input);
+    input.MsgPackSize = 1;
+    input.Messages[0].rawData[0] = static_cast<uint8_t>(ODID_MESSAGETYPE_PACKED << 4);
+
+    ODID_MessagePack_encoded encoded;
+    TEST_ASSERT_EQUAL_INT(ODID_FAIL, encodeMessagePack(&encoded, &input));
+}
+
+void test_decode_open_drone_id_rejects_invalid_message_type() {
+    ODID_UAS_Data uas;
+    odid_initUasData(&uas);
+
+    uint8_t invalid_msg[ODID_MESSAGE_SIZE] = {0};
+    invalid_msg[0] = 0xE0;
+
+    TEST_ASSERT_EQUAL_INT(ODID_MESSAGETYPE_INVALID, decodeOpenDroneID(&uas, invalid_msg));
+}
+
 void test_detector_logic_normalize_and_validate() {
     std::string normalized = detector_logic::normalizeMac("AA-BB-CC DD:EE:FF");
     TEST_ASSERT_EQUAL_STRING("aa:bb:ccdd:ee:ff", normalized.c_str());
@@ -197,6 +288,12 @@ int main() {
     RUN_TEST(test_wifi_pack_build_and_process_roundtrip);
     RUN_TEST(test_wifi_nan_action_frame_roundtrip);
     RUN_TEST(test_wifi_beacon_builder_rejects_invalid_ssid_len);
+    RUN_TEST(test_wifi_process_pack_rejects_truncated_buffer);
+    RUN_TEST(test_wifi_process_pack_rejects_invalid_single_message_size);
+    RUN_TEST(test_wifi_nan_action_frame_rejects_wrong_destination);
+    RUN_TEST(test_wifi_nan_action_frame_rejects_bad_service_info_length);
+    RUN_TEST(test_encode_message_pack_rejects_packed_message_inside_pack);
+    RUN_TEST(test_decode_open_drone_id_rejects_invalid_message_type);
     RUN_TEST(test_detector_logic_normalize_and_validate);
     RUN_TEST(test_detector_logic_filter_matching);
     RUN_TEST(test_flockyou_logic_matching_helpers);
