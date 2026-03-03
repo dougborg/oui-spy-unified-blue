@@ -11,10 +11,9 @@
 
 // ============================================================================
 // Flock-You Module: Surveillance device detector with all 5 detection methods
-// Refactored from raw/flockyou.cpp — uses shared HAL, GPS, BLE, web server
 // ============================================================================
 
-// --- Detection Patterns (preserved from original) ---
+// --- Detection Patterns (compile-time data) ---
 
 static const char* fyMACPrefixes[] = {"58:8e:81", "cc:cc:cc", "ec:1b:bd", "90:35:ea", "04:0d:84",
                                       "f0:82:c0", "1c:34:f1", "38:5b:44", "94:34:69", "b4:e3:f9",
@@ -39,42 +38,10 @@ static const char* fyRavenUUIDs[] = {RAVEN_DEVICE_INFO_SERVICE, RAVEN_GPS_SERVIC
                                      RAVEN_UPLOAD_SERVICE,      RAVEN_ERROR_SERVICE,
                                      RAVEN_OLD_HEALTH_SERVICE,  RAVEN_OLD_LOCATION_SERVICE};
 
-// --- Detection Storage ---
-
-#define FY_MAX_DETECTIONS 200
-
-struct FYDetection {
-    char mac[18];
-    char name[48];
-    int rssi;
-    char method[24];
-    unsigned long firstSeen;
-    unsigned long lastSeen;
-    int count;
-    bool isRaven;
-    char ravenFW[16];
-    double gpsLat;
-    double gpsLon;
-    float gpsAcc;
-    bool hasGPS;
-};
-
-static FYDetection fyDet[FY_MAX_DETECTIONS];
-static int fyDetCount = 0;
-static SemaphoreHandle_t fyMutex = NULL;
-static bool fyEnabled = true;
-static bool fyTriggered = false;
-static bool fyDeviceInRange = false;
-static unsigned long fyLastDetTime = 0;
-static unsigned long fyLastHB = 0;
-
-// Session persistence
+// Session file paths
 #define FY_SESSION_FILE "/session.json"
 #define FY_PREV_FILE "/prev_session.json"
 #define FY_SAVE_INTERVAL 15000
-static unsigned long fyLastSave = 0;
-static int fyLastSaveCount = 0;
-static bool fyFSReady = false;
 
 // ============================================================================
 // Detection Helpers
@@ -125,7 +92,7 @@ static const char* fyEstimateRavenFW(NimBLEAdvertisedDevice* dev) {
     return flockyou_logic::estimateRavenFirmware(hasNewGPS, hasOldLoc, hasPower);
 }
 
-static void fyAttachGPS(FYDetection& d) {
+void FlockyouModule::attachGPS(FYDetection& d) {
     if (hal::gpsIsFresh()) {
         const hal::GPSData& g = hal::gpsGet();
         d.hasGPS = true;
@@ -135,33 +102,33 @@ static void fyAttachGPS(FYDetection& d) {
     }
 }
 
-static int fyAddDetection(const char* mac, const char* name, int rssi, const char* method,
-                          bool isRaven = false, const char* ravenFW = "") {
-    if (!fyMutex || xSemaphoreTake(fyMutex, pdMS_TO_TICKS(100)) != pdTRUE)
+int FlockyouModule::addDetection(const char* mac, const char* detName, int rssi, const char* method,
+                                 bool isRaven, const char* ravenFW) {
+    if (!_mutex || xSemaphoreTake(_mutex, pdMS_TO_TICKS(100)) != pdTRUE)
         return -1;
 
     // Update existing
-    for (int i = 0; i < fyDetCount; i++) {
-        if (strcasecmp(fyDet[i].mac, mac) == 0) {
-            fyDet[i].count++;
-            fyDet[i].lastSeen = millis();
-            fyDet[i].rssi = rssi;
-            if (name && name[0])
-                strncpy(fyDet[i].name, name, sizeof(fyDet[i].name) - 1);
-            fyAttachGPS(fyDet[i]);
-            xSemaphoreGive(fyMutex);
+    for (int i = 0; i < _detCount; i++) {
+        if (strcasecmp(_det[i].mac, mac) == 0) {
+            _det[i].count++;
+            _det[i].lastSeen = millis();
+            _det[i].rssi = rssi;
+            if (detName && detName[0])
+                strncpy(_det[i].name, detName, sizeof(_det[i].name) - 1);
+            attachGPS(_det[i]);
+            xSemaphoreGive(_mutex);
             return i;
         }
     }
 
     // Add new
-    if (fyDetCount < FY_MAX_DETECTIONS) {
-        FYDetection& d = fyDet[fyDetCount];
+    if (_detCount < FY_MAX_DETECTIONS) {
+        FYDetection& d = _det[_detCount];
         memset(&d, 0, sizeof(d));
         strncpy(d.mac, mac, sizeof(d.mac) - 1);
-        if (name) {
-            for (int j = 0; j < (int)sizeof(d.name) - 1 && name[j]; j++)
-                d.name[j] = (name[j] == '"' || name[j] == '\\') ? '_' : name[j];
+        if (detName) {
+            for (int j = 0; j < (int)sizeof(d.name) - 1 && detName[j]; j++)
+                d.name[j] = (detName[j] == '"' || detName[j] == '\\') ? '_' : detName[j];
         }
         d.rssi = rssi;
         strncpy(d.method, method, sizeof(d.method) - 1);
@@ -170,13 +137,13 @@ static int fyAddDetection(const char* mac, const char* name, int rssi, const cha
         d.count = 1;
         d.isRaven = isRaven;
         strncpy(d.ravenFW, ravenFW ? ravenFW : "", sizeof(d.ravenFW) - 1);
-        fyAttachGPS(d);
-        int idx = fyDetCount++;
-        xSemaphoreGive(fyMutex);
+        attachGPS(d);
+        int idx = _detCount++;
+        xSemaphoreGive(_mutex);
         return idx;
     }
 
-    xSemaphoreGive(fyMutex);
+    xSemaphoreGive(_mutex);
     return -1;
 }
 
@@ -184,21 +151,21 @@ static int fyAddDetection(const char* mac, const char* name, int rssi, const cha
 // Session Persistence (LittleFS)
 // ============================================================================
 
-static void fySaveSession() {
-    if (!fyFSReady || !fyMutex)
+void FlockyouModule::saveSession() {
+    if (!_fsReady || !_mutex)
         return;
-    if (xSemaphoreTake(fyMutex, pdMS_TO_TICKS(300)) != pdTRUE)
+    if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(300)) != pdTRUE)
         return;
     File f = LittleFS.open(FY_SESSION_FILE, "w");
     if (!f) {
-        xSemaphoreGive(fyMutex);
+        xSemaphoreGive(_mutex);
         return;
     }
     f.print("[");
-    for (int i = 0; i < fyDetCount; i++) {
+    for (int i = 0; i < _detCount; i++) {
         if (i > 0)
             f.print(",");
-        FYDetection& d = fyDet[i];
+        FYDetection& d = _det[i];
         f.printf("{\"mac\":\"%s\",\"name\":\"%s\",\"rssi\":%d,\"method\":\"%s\","
                  "\"first\":%lu,\"last\":%lu,\"count\":%d,\"raven\":%s,\"fw\":\"%s\"",
                  d.mac, d.name, d.rssi, d.method, d.firstSeen, d.lastSeen, d.count,
@@ -210,12 +177,12 @@ static void fySaveSession() {
     }
     f.print("]");
     f.close();
-    fyLastSaveCount = fyDetCount;
-    xSemaphoreGive(fyMutex);
+    _lastSaveCount = _detCount;
+    xSemaphoreGive(_mutex);
 }
 
-static void fyPromotePrevSession() {
-    if (!fyFSReady || !LittleFS.exists(FY_SESSION_FILE))
+void FlockyouModule::promotePrevSession() {
+    if (!_fsReady || !LittleFS.exists(FY_SESSION_FILE))
         return;
     File src = LittleFS.open(FY_SESSION_FILE, "r");
     if (!src)
@@ -236,31 +203,31 @@ static void fyPromotePrevSession() {
 }
 
 // ============================================================================
-// JSON/CSV/KML Writers
+// JSON/KML Writers
 // ============================================================================
 
-static void fyWriteJSON(AsyncResponseStream* resp) {
+void FlockyouModule::writeJSON(AsyncResponseStream* resp) {
     resp->print("[");
-    if (fyMutex && xSemaphoreTake(fyMutex, pdMS_TO_TICKS(200)) == pdTRUE) {
-        for (int i = 0; i < fyDetCount; i++) {
+    if (_mutex && xSemaphoreTake(_mutex, pdMS_TO_TICKS(200)) == pdTRUE) {
+        for (int i = 0; i < _detCount; i++) {
             if (i > 0)
                 resp->print(",");
             resp->printf("{\"mac\":\"%s\",\"name\":\"%s\",\"rssi\":%d,\"method\":\"%s\","
                          "\"first\":%lu,\"last\":%lu,\"count\":%d,\"raven\":%s,\"fw\":\"%s\"",
-                         fyDet[i].mac, fyDet[i].name, fyDet[i].rssi, fyDet[i].method,
-                         fyDet[i].firstSeen, fyDet[i].lastSeen, fyDet[i].count,
-                         fyDet[i].isRaven ? "true" : "false", fyDet[i].ravenFW);
-            if (fyDet[i].hasGPS)
-                resp->printf(",\"gps\":{\"lat\":%.8f,\"lon\":%.8f,\"acc\":%.1f}", fyDet[i].gpsLat,
-                             fyDet[i].gpsLon, fyDet[i].gpsAcc);
+                         _det[i].mac, _det[i].name, _det[i].rssi, _det[i].method, _det[i].firstSeen,
+                         _det[i].lastSeen, _det[i].count, _det[i].isRaven ? "true" : "false",
+                         _det[i].ravenFW);
+            if (_det[i].hasGPS)
+                resp->printf(",\"gps\":{\"lat\":%.8f,\"lon\":%.8f,\"acc\":%.1f}", _det[i].gpsLat,
+                             _det[i].gpsLon, _det[i].gpsAcc);
             resp->print("}");
         }
-        xSemaphoreGive(fyMutex);
+        xSemaphoreGive(_mutex);
     }
     resp->print("]");
 }
 
-static void fyWriteKML(AsyncResponseStream* resp) {
+void FlockyouModule::writeKML(AsyncResponseStream* resp) {
     resp->print(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<kml "
         "xmlns=\"http://www.opengis.net/kml/2.2\">\n<Document>\n"
@@ -269,9 +236,9 @@ static void fyWriteKML(AsyncResponseStream* resp) {
         "id=\"det\"><IconStyle><color>ff4489ec</color><scale>1.0</scale></IconStyle></Style>\n"
         "<Style "
         "id=\"raven\"><IconStyle><color>ff4444ef</color><scale>1.2</scale></IconStyle></Style>\n");
-    if (fyMutex && xSemaphoreTake(fyMutex, pdMS_TO_TICKS(300)) == pdTRUE) {
-        for (int i = 0; i < fyDetCount; i++) {
-            FYDetection& d = fyDet[i];
+    if (_mutex && xSemaphoreTake(_mutex, pdMS_TO_TICKS(300)) == pdTRUE) {
+        for (int i = 0; i < _detCount; i++) {
+            FYDetection& d = _det[i];
             if (!d.hasGPS)
                 continue;
             resp->printf("<Placemark><name>%s</name><styleUrl>#%s</styleUrl>"
@@ -287,7 +254,7 @@ static void fyWriteKML(AsyncResponseStream* resp) {
                          "Placemark>\n",
                          d.gpsLon, d.gpsLat);
         }
-        xSemaphoreGive(fyMutex);
+        xSemaphoreGive(_mutex);
     }
     resp->print("</Document>\n</kml>");
 }
@@ -297,11 +264,11 @@ static void fyWriteKML(AsyncResponseStream* resp) {
 // ============================================================================
 
 void FlockyouModule::setup() {
-    fyMutex = xSemaphoreCreateMutex();
+    _mutex = xSemaphoreCreateMutex();
 
     if (LittleFS.begin(true)) {
-        fyFSReady = true;
-        fyPromotePrevSession();
+        _fsReady = true;
+        promotePrevSession();
         Serial.println("[FLOCKYOU] LittleFS ready");
     }
 
@@ -314,28 +281,27 @@ void FlockyouModule::loop() {
         return;
 
     // Heartbeat tracking
-    if (fyDeviceInRange) {
-        if (millis() - fyLastHB >= 10000) {
+    if (_deviceInRange) {
+        if (millis() - _lastHB >= 10000) {
             hal::buzzerPlay(hal::SND_CROW_HEARTBEAT);
             hal::neopixelSetState(hal::NEO_HEARTBEAT_GLOW, 300);
-            fyLastHB = millis();
+            _lastHB = millis();
         }
-        if (millis() - fyLastDetTime >= 30000) {
-            fyDeviceInRange = false;
-            fyTriggered = false;
+        if (millis() - _lastDetTime >= 30000) {
+            _deviceInRange = false;
+            _triggered = false;
             hal::neopixelSetState(hal::NEO_IDLE_BREATHING);
         }
     }
 
     // Auto-save
-    if (fyFSReady && millis() - fyLastSave >= FY_SAVE_INTERVAL) {
-        if (fyDetCount > 0 && fyDetCount != fyLastSaveCount)
-            fySaveSession();
-        fyLastSave = millis();
-    } else if (fyFSReady && fyDetCount > 0 && fyLastSaveCount == 0 &&
-               millis() - fyLastSave >= 5000) {
-        fySaveSession();
-        fyLastSave = millis();
+    if (_fsReady && millis() - _lastSave >= FY_SAVE_INTERVAL) {
+        if (_detCount > 0 && _detCount != _lastSaveCount)
+            saveSession();
+        _lastSave = millis();
+    } else if (_fsReady && _detCount > 0 && _lastSaveCount == 0 && millis() - _lastSave >= 5000) {
+        saveSession();
+        _lastSave = millis();
     }
 }
 
@@ -353,7 +319,7 @@ void FlockyouModule::onBLEAdvertisement(NimBLEAdvertisedDevice* dev) {
                       (uint8_t)m[3], (uint8_t)m[4], (uint8_t)m[5]};
 
     int rssi = dev->getRSSI();
-    std::string name = dev->haveName() ? dev->getName() : "";
+    std::string devName = dev->haveName() ? dev->getName() : "";
 
     bool detected = false;
     const char* method = "";
@@ -367,7 +333,7 @@ void FlockyouModule::onBLEAdvertisement(NimBLEAdvertisedDevice* dev) {
     }
 
     // 2. Device name
-    if (!detected && !name.empty() && fyCheckName(name.c_str())) {
+    if (!detected && !devName.empty() && fyCheckName(devName.c_str())) {
         detected = true;
         method = "device_name";
     }
@@ -398,7 +364,7 @@ void FlockyouModule::onBLEAdvertisement(NimBLEAdvertisedDevice* dev) {
     if (!detected)
         return;
 
-    int idx = fyAddDetection(addrStr.c_str(), name.c_str(), rssi, method, isRaven, ravenFW);
+    addDetection(addrStr.c_str(), devName.c_str(), rssi, method, isRaven, ravenFW);
 
     // Serial JSON output
     char gpsBuf[80] = "";
@@ -412,21 +378,21 @@ void FlockyouModule::onBLEAdvertisement(NimBLEAdvertisedDevice* dev) {
         Serial.printf(
             "{\"module\":\"flockyou\",\"detection_method\":\"%s\",\"mac_address\":\"%s\","
             "\"device_name\":\"%s\",\"rssi\":%d,\"is_raven\":true,\"raven_fw\":\"%s\"%s}\n",
-            method, addrStr.c_str(), name.c_str(), rssi, ravenFW, gpsBuf);
+            method, addrStr.c_str(), devName.c_str(), rssi, ravenFW, gpsBuf);
     } else {
         Serial.printf("{\"module\":\"flockyou\",\"detection_method\":\"%s\",\"mac_address\":\"%s\","
                       "\"device_name\":\"%s\",\"rssi\":%d%s}\n",
-                      method, addrStr.c_str(), name.c_str(), rssi, gpsBuf);
+                      method, addrStr.c_str(), devName.c_str(), rssi, gpsBuf);
     }
 
-    if (!fyTriggered) {
-        fyTriggered = true;
+    if (!_triggered) {
+        _triggered = true;
         hal::buzzerPlay(hal::SND_CROW_ALARM);
         hal::neopixelFlash(0, 300, 0); // red-pink-red
     }
-    fyDeviceInRange = true;
-    fyLastDetTime = millis();
-    fyLastHB = millis();
+    _deviceInRange = true;
+    _lastDetTime = millis();
+    _lastHB = millis();
 }
 
 // ============================================================================
@@ -434,22 +400,22 @@ void FlockyouModule::onBLEAdvertisement(NimBLEAdvertisedDevice* dev) {
 // ============================================================================
 
 void FlockyouModule::registerRoutes(AsyncWebServer& server) {
-    server.on("/api/flockyou/detections", HTTP_GET, [](AsyncWebServerRequest* r) {
+    server.on("/api/flockyou/detections", HTTP_GET, [this](AsyncWebServerRequest* r) {
         AsyncResponseStream* resp = r->beginResponseStream("application/json");
-        fyWriteJSON(resp);
+        writeJSON(resp);
         r->send(resp);
     });
 
-    server.on("/api/flockyou/stats", HTTP_GET, [](AsyncWebServerRequest* r) {
+    server.on("/api/flockyou/stats", HTTP_GET, [this](AsyncWebServerRequest* r) {
         int raven = 0, withGPS = 0;
-        if (fyMutex && xSemaphoreTake(fyMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-            for (int i = 0; i < fyDetCount; i++) {
-                if (fyDet[i].isRaven)
+        if (_mutex && xSemaphoreTake(_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+            for (int i = 0; i < _detCount; i++) {
+                if (_det[i].isRaven)
                     raven++;
-                if (fyDet[i].hasGPS)
+                if (_det[i].hasGPS)
                     withGPS++;
             }
-            xSemaphoreGive(fyMutex);
+            xSemaphoreGive(_mutex);
         }
         const hal::GPSData& g = hal::gpsGet();
         const char* gpsSrc = "none";
@@ -462,7 +428,7 @@ void FlockyouModule::registerRoutes(AsyncWebServer& server) {
                  "{\"total\":%d,\"raven\":%d,\"ble\":\"active\","
                  "\"gps_valid\":%s,\"gps_tagged\":%d,\"gps_src\":\"%s\","
                  "\"gps_sats\":%d,\"gps_hw_detected\":%s}",
-                 fyDetCount, raven, hal::gpsIsFresh() ? "true" : "false", withGPS, gpsSrc,
+                 _detCount, raven, hal::gpsIsFresh() ? "true" : "false", withGPS, gpsSrc,
                  g.satellites, g.hwDetected ? "true" : "false");
         r->send(200, "application/json", buf);
     });
@@ -515,21 +481,21 @@ void FlockyouModule::registerRoutes(AsyncWebServer& server) {
         r->send(resp);
     });
 
-    server.on("/api/flockyou/export/json", HTTP_GET, [](AsyncWebServerRequest* r) {
+    server.on("/api/flockyou/export/json", HTTP_GET, [this](AsyncWebServerRequest* r) {
         AsyncResponseStream* resp = r->beginResponseStream("application/json");
         resp->addHeader("Content-Disposition", "attachment; filename=\"flockyou_detections.json\"");
-        fyWriteJSON(resp);
+        writeJSON(resp);
         r->send(resp);
     });
 
-    server.on("/api/flockyou/export/csv", HTTP_GET, [](AsyncWebServerRequest* r) {
+    server.on("/api/flockyou/export/csv", HTTP_GET, [this](AsyncWebServerRequest* r) {
         AsyncResponseStream* resp = r->beginResponseStream("text/csv");
         resp->addHeader("Content-Disposition", "attachment; filename=\"flockyou_detections.csv\"");
         resp->println("mac,name,rssi,method,first_seen_ms,last_seen_ms,count,is_raven,raven_fw,"
                       "latitude,longitude,gps_accuracy");
-        if (fyMutex && xSemaphoreTake(fyMutex, pdMS_TO_TICKS(200)) == pdTRUE) {
-            for (int i = 0; i < fyDetCount; i++) {
-                FYDetection& d = fyDet[i];
+        if (_mutex && xSemaphoreTake(_mutex, pdMS_TO_TICKS(200)) == pdTRUE) {
+            for (int i = 0; i < _detCount; i++) {
+                FYDetection& d = _det[i];
                 if (d.hasGPS) {
                     resp->printf("\"%s\",\"%s\",%d,\"%s\",%lu,%lu,%d,%s,\"%s\",%.8f,%.8f,%.1f\n",
                                  d.mac, d.name, d.rssi, d.method, d.firstSeen, d.lastSeen, d.count,
@@ -541,28 +507,28 @@ void FlockyouModule::registerRoutes(AsyncWebServer& server) {
                                  d.isRaven ? "true" : "false", d.ravenFW);
                 }
             }
-            xSemaphoreGive(fyMutex);
+            xSemaphoreGive(_mutex);
         }
         r->send(resp);
     });
 
-    server.on("/api/flockyou/export/kml", HTTP_GET, [](AsyncWebServerRequest* r) {
+    server.on("/api/flockyou/export/kml", HTTP_GET, [this](AsyncWebServerRequest* r) {
         AsyncResponseStream* resp = r->beginResponseStream("application/vnd.google-earth.kml+xml");
         resp->addHeader("Content-Disposition", "attachment; filename=\"flockyou_detections.kml\"");
-        fyWriteKML(resp);
+        writeKML(resp);
         r->send(resp);
     });
 
-    server.on("/api/flockyou/history", HTTP_GET, [](AsyncWebServerRequest* r) {
-        if (fyFSReady && LittleFS.exists(FY_PREV_FILE)) {
+    server.on("/api/flockyou/history", HTTP_GET, [this](AsyncWebServerRequest* r) {
+        if (_fsReady && LittleFS.exists(FY_PREV_FILE)) {
             r->send(LittleFS, FY_PREV_FILE, "application/json");
         } else {
             r->send(200, "application/json", "[]");
         }
     });
 
-    server.on("/api/flockyou/history/json", HTTP_GET, [](AsyncWebServerRequest* r) {
-        if (fyFSReady && LittleFS.exists(FY_PREV_FILE)) {
+    server.on("/api/flockyou/history/json", HTTP_GET, [this](AsyncWebServerRequest* r) {
+        if (_fsReady && LittleFS.exists(FY_PREV_FILE)) {
             AsyncWebServerResponse* resp =
                 r->beginResponse(LittleFS, FY_PREV_FILE, "application/json");
             resp->addHeader("Content-Disposition",
@@ -573,14 +539,14 @@ void FlockyouModule::registerRoutes(AsyncWebServer& server) {
         }
     });
 
-    server.on("/api/flockyou/clear", HTTP_GET, [](AsyncWebServerRequest* r) {
-        fySaveSession();
-        if (fyMutex && xSemaphoreTake(fyMutex, pdMS_TO_TICKS(200)) == pdTRUE) {
-            fyDetCount = 0;
-            memset(fyDet, 0, sizeof(fyDet));
-            fyTriggered = false;
-            fyDeviceInRange = false;
-            xSemaphoreGive(fyMutex);
+    server.on("/api/flockyou/clear", HTTP_GET, [this](AsyncWebServerRequest* r) {
+        saveSession();
+        if (_mutex && xSemaphoreTake(_mutex, pdMS_TO_TICKS(200)) == pdTRUE) {
+            _detCount = 0;
+            memset(_det, 0, sizeof(_det));
+            _triggered = false;
+            _deviceInRange = false;
+            xSemaphoreGive(_mutex);
         }
         r->send(200, "application/json", "{\"status\":\"cleared\"}");
     });
@@ -593,5 +559,4 @@ bool FlockyouModule::isEnabled() {
 }
 void FlockyouModule::setEnabled(bool enabled) {
     _enabled = enabled;
-    fyEnabled = enabled;
 }

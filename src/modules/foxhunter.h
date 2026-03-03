@@ -17,4 +17,13 @@ class FoxhunterModule : public IDetectionModule, public hal::BLEListener {
 
   private:
     bool _enabled = true;
+    String _targetMAC;
+    bool _sessionFirstDetection = true;
+    bool _targetDetected = false;
+    int _currentRSSI = -100;
+    unsigned long _lastTargetSeen = 0;
+    unsigned long _lastRSSIPrint = 0;
+
+    void loadConfig();
+    void saveConfig();
 };
