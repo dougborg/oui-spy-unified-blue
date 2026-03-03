@@ -1,0 +1,37 @@
+{
+  "name": "oui-spy-unified-blue (USB Linux)",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "remoteUser": "vscode",
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "containerEnv": {
+    "PLATFORMIO_CORE_DIR": "/home/vscode/.platformio",
+    "PATH": "/home/vscode/.local/bin:${containerEnv:PATH}"
+  },
+  "mounts": [
+    "source=pio-home,target=/home/vscode/.platformio,type=volume"
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "platformio.platformio-ide",
+        "ms-vscode.cpptools",
+        "ms-vscode.cpptools-extension-pack",
+        "ms-vscode.vscode-serial-monitor"
+      ],
+      "settings": {
+        "C_Cpp.default.configurationProvider": "platformio.platformio-ide",
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  },
+  "postCreateCommand": "pio --version && pio pkg install -d .",
+  "runArgs": [
+    "--init",
+    "--privileged",
+    "--group-add=dialout",
+    "--device=/dev/bus/usb:/dev/bus/usb"
+  ]
+}

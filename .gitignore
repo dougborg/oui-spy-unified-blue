@@ -4,6 +4,6 @@
 .DS_Store
 *.o
 *.d
-# firmware/*.bin
+firmware/*.bin
 __pycache__/
 .venv/

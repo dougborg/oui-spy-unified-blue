@@ -1,0 +1,38 @@
+{
+  "name": "oui-spy-unified-blue",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "remoteUser": "vscode",
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "containerEnv": {
+    "PLATFORMIO_CORE_DIR": "/home/vscode/.platformio",
+    "PATH": "/home/vscode/.local/bin:${containerEnv:PATH}"
+  },
+  "mounts": [
+    "source=pio-home,target=/home/vscode/.platformio,type=volume"
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "platformio.platformio-ide",
+        "ms-vscode.cpptools",
+        "ms-vscode.cpptools-extension-pack",
+        "ms-vscode.vscode-serial-monitor"
+      ],
+      "settings": {
+        "C_Cpp.default.configurationProvider": "platformio.platformio-ide",
+        "files.associations": {
+          "*.tcc": "cpp"
+        },
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  },
+  "postCreateCommand": "pio --version && pio pkg install -d .",
+  "postAttachCommand": "echo 'Devcontainer ready. Build with: pio run (see .devcontainer/README.md for USB upload options).'",
+  "runArgs": [
+    "--init"
+  ]
+}

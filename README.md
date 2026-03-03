@@ -81,7 +81,7 @@ Each mode creates its own AP. When switching modes, **your phone/laptop will aut
 - **Disable auto-connect/auto-reconnect** for all OUI-SPY networks in your WiFi settings
 
 | Mode | SSID | Password | Dashboard | Notes |
-|------|------|----------|-----------|-------|
+| ------ | ------ | ---------- | ----------- | ------- |
 | **Boot Selector** | `oui-spy` | `ouispy123` | `192.168.4.1` | Configurable from selector UI, saved to NVS |
 | **Detector** | `snoopuntothem` | `astheysnoopuntous` | `192.168.4.1` | Configurable from web dashboard, saved to NVS |
 | **Foxhunter** | `foxhunter` | `foxhunter` | `192.168.4.1` | Fixed credentials |
@@ -97,7 +97,7 @@ Each mode creates its own AP. When switching modes, **your phone/laptop will aut
 **Board:** Seeed Studio XIAO ESP32-S3
 
 | Pin | Function |
-|-----|----------|
+| ----- | ---------- |
 | GPIO 3 | Piezo buzzer |
 | GPIO 21 | NeoPixel LED |
 | GPIO 0 | BOOT button (hold 2s to return to mode selector) |
@@ -153,7 +153,68 @@ pio run -t upload           # flash directly
 pio device monitor          # serial output (115200 baud)
 ```
 
+### Task Runner (just)
+
+A `Justfile` is included for common commands.
+
+Install `just`:
+
+```bash
+# macOS
+brew install just
+
+# Ubuntu/Debian (if available in your repo)
+sudo apt-get install -y just
+```
+
+Common tasks:
+
+```bash
+just build
+just upload
+just monitor
+just flash
+just flash firmware/my_firmware.bin
+just devcontainer-auto
+```
+
+### Dependency Management
+
+Dependency sources in this repo:
+
+- `platformio.ini` manages firmware platform and libraries (`platform`, `lib_deps`)
+- `.devcontainer/Dockerfile` manages container toolchain dependencies (Python tools, `just`, PlatformIO CLI)
+- `.devcontainer/devcontainer.json` manages VS Code extension dependencies
+
+Automation included:
+
+- `Dependabot` config in `.github/dependabot.yml` for Dockerfile base image/deps and GitHub Actions updates
+- Weekly `PlatformIO Dependency Smoke` workflow in `.github/workflows/platformio-dependency-smoke.yml` that installs packages and runs `pio run`
+
 The build output lands in `.pio/build/seeed_xiao_esp32s3/firmware.bin` — copy that into `firmware/` if you want to use the flasher script instead.
+
+### Dev Container (VS Code)
+
+This repo includes a ready-to-use devcontainer in `.devcontainer/` with PlatformIO preinstalled.
+
+1. Open the project in VS Code
+2. Run **Dev Containers: Reopen in Container**
+3. After setup completes, build with:
+
+```bash
+pio run
+```
+
+Useful commands inside the container:
+
+```bash
+pio run -t upload
+pio device monitor
+```
+
+Advanced host-specific setup (Linux USB passthrough template, macOS/Windows guidance) is documented in `.devcontainer/README.md`.
+
+> **macOS note:** USB passthrough from containers can be limited depending on your Docker/Dev Containers setup. If serial upload is unavailable inside the container, build in-container (`pio run`) and flash from host (`python flash.py` or host `pio run -t upload`).
 
 **Dependencies** (managed by PlatformIO):
 
@@ -177,7 +238,7 @@ The build output lands in `.pio/build/seeed_xiao_esp32s3/firmware.bin` — copy 
 Each firmware is available as a standalone project:
 
 | Firmware | Description | Board |
-|----------|-------------|-------|
+| ---------- | ------------- | ------- |
 | **[OUI-SPY Unified](https://github.com/colonelpanichacks/oui-spy-unified-blue)** | Multi-mode BLE + WiFi detector (this project) | ESP32-S3 / ESP32-C5 |
 | **[OUI-SPY Detector](https://github.com/colonelpanichacks/ouispy-detector)** | Targeted BLE scanner with OUI filtering | ESP32-S3 |
 | **[OUI-SPY Foxhunter](https://github.com/colonelpanichacks/ouispy-foxhunter)** | RSSI-based proximity tracker | ESP32-S3 |
@@ -190,7 +251,7 @@ Each firmware is available as a standalone project:
 
 ## Author
 
-**colonelpanichacks**
+colonelpanichacks
 
 ---
 
