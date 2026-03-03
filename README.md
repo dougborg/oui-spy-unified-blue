@@ -190,6 +190,8 @@ Automation included:
 
 - `Dependabot` config in `.github/dependabot.yml` for Dockerfile base image/deps and GitHub Actions updates
 - Weekly `PlatformIO Dependency Smoke` workflow in `.github/workflows/platformio-dependency-smoke.yml` that installs packages and runs `pio run`
+- `CI` workflow in `.github/workflows/ci.yml` for PR/push validation (Markdown lint + PlatformIO build + artifact upload)
+- `Release Firmware` workflow in `.github/workflows/release-firmware.yml` for tag-based GitHub Releases with firmware binaries and checksums
 
 The build output lands in `.pio/build/seeed_xiao_esp32s3/firmware.bin` — copy that into `firmware/` if you want to use the flasher script instead.
 

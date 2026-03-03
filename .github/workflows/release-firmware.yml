@@ -1,0 +1,60 @@
+name: Release Firmware
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio/.cache
+            ~/.platformio/packages
+            ~/.platformio/platforms
+          key: ${{ runner.os }}-platformio-${{ hashFiles('platformio.ini') }}
+          restore-keys: |
+            ${{ runner.os }}-platformio-
+
+      - name: Install PlatformIO
+        run: |
+          python -m pip install --upgrade pip
+          pip install platformio
+
+      - name: Install project packages
+        run: pio pkg install -d .
+
+      - name: Build firmware
+        run: pio run
+
+      - name: Prepare release artifacts
+        run: |
+          mkdir -p release
+          cp .pio/build/seeed_xiao_esp32s3/firmware.bin release/oui-spy-unified-blue-firmware.bin
+          cp .pio/build/seeed_xiao_esp32s3/firmware.elf release/oui-spy-unified-blue-firmware.elf
+          sha256sum release/* > release/SHA256SUMS.txt
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/oui-spy-unified-blue-firmware.bin
+            release/oui-spy-unified-blue-firmware.elf
+            release/SHA256SUMS.txt
