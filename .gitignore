@@ -7,3 +7,6 @@
 firmware/*.bin
 __pycache__/
 .venv/
+coverage-native.xml
+*.gcda
+*.gcno

@@ -184,6 +184,7 @@ Quality tasks:
 just setup-dev
 just test
 just test-cpp
+just coverage-cpp
 just analyze-cpp
 just lint
 just quality
@@ -209,6 +210,7 @@ Automation included:
 
 - `pytest` tests live in `tests/` (currently focused on `flash.py` behavior)
 - PlatformIO native C++ unit tests live in `test/` and run with `pio test -e native`
+- Native coverage reports are generated with `gcovr` via `just coverage-cpp` (XML output at `coverage-native.xml`)
 - Static analysis runs with `cppcheck` on core app sources (`src/main.cpp`, `src/hal`, `src/modules`, `src/web`) to keep CI runtime predictable
 - C/C++ formatting is standardized via `.clang-format`
 - `pre-commit` runs consistent quality checks locally and in CI (`.pre-commit-config.yaml`)

@@ -27,6 +27,12 @@ test:
 test-cpp:
     pio test -e native
 
+coverage-cpp:
+    pio test -e native
+    python3 -m gcovr --root . --txt --print-summary \
+        --filter src/opendroneid.c \
+        --xml-pretty --xml coverage-native.xml
+
 lint:
     pre-commit run --all-files
 
