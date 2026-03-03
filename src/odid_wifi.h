@@ -13,9 +13,11 @@ gabriel.c.cox@intel.com
 #ifndef _ODID_WIFI_H_
 #define _ODID_WIFI_H_
 
+#include "opendroneid.h"
+
 /**
-* IEEE 802.11 structs to build management action frame
-*/
+ * IEEE 802.11 structs to build management action frame
+ */
 struct __attribute__((__packed__)) ieee80211_mgmt {
     uint16_t frame_control;
     uint16_t duration;
@@ -44,10 +46,10 @@ struct __attribute__((__packed__)) ieee80211_supported_rates {
 };
 
 struct __attribute__((__packed__)) ieee80211_vendor_specific {
-	uint8_t element_id;
-	uint8_t length;
-	uint8_t oui[3];
-	uint8_t oui_type;
+    uint8_t element_id;
+    uint8_t length;
+    uint8_t oui[3];
+    uint8_t oui_type;
 };
 
 struct __attribute__((__packed__)) nan_service_discovery {

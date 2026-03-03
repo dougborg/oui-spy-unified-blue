@@ -12,7 +12,7 @@ namespace hal {
 
 // Callback interface for BLE advertisement listeners
 class BLEListener {
-public:
+  public:
     virtual ~BLEListener() = default;
     virtual void onBLEAdvertisement(NimBLEAdvertisedDevice* device) = 0;
 };

@@ -1,0 +1,22 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: end-of-file-fixer
+        exclude: ^(src/raw/|src/opendroneid\.c$|src/wifi\.c$)
+      - id: trailing-whitespace
+        exclude: ^(src/raw/|src/opendroneid\.c$|src/wifi\.c$)
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: check-added-large-files
+
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.18.1
+    hooks:
+      - id: markdownlint-cli2
+
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v18.1.8
+    hooks:
+      - id: clang-format
+        files: ^src/(hal|modules|web)/.*\.(c|cc|cpp|h|hh|hpp)$|^src/main\.cpp$

@@ -1,34 +1,34 @@
+#include <Adafruit_NeoPixel.h>
 #include <Arduino.h>
-#include <WiFi.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
-#include <Preferences.h>
-#include <NimBLEDevice.h>
-#include <NimBLEUtils.h>
-#include <NimBLEScan.h>
 #include <NimBLEAdvertisedDevice.h>
+#include <NimBLEDevice.h>
+#include <NimBLEScan.h>
+#include <NimBLEUtils.h>
+#include <Preferences.h>
+#include <WiFi.h>
+#include <algorithm>
 #include <esp_log.h>
 #include <esp_wifi.h>
 #include <nvs_flash.h>
 #include <vector>
-#include <algorithm>
-#include <Adafruit_NeoPixel.h>
 
 // ================================
 // Pin and Buzzer Definitions - Xiao ESP32 S3
 // ================================
-#define BUZZER_PIN 3   // GPIO3 (D2) for buzzer - good PWM pin on Xiao ESP32 S3
+#define BUZZER_PIN 3      // GPIO3 (D2) for buzzer - good PWM pin on Xiao ESP32 S3
 #define BUZZER_FREQ 2000  // Frequency in Hz
-#define BUZZER_DUTY 127  // 50% duty cycle for good volume without excessive power draw
-#define BEEP_DURATION 200  // Duration of each beep in ms
-#define BEEP_PAUSE 50  // Pause between beeps in ms (faster sequence)
-#define LED_PIN 21   // GPIO21 for onboard LED (inverted logic)
+#define BUZZER_DUTY 127   // 50% duty cycle for good volume without excessive power draw
+#define BEEP_DURATION 200 // Duration of each beep in ms
+#define BEEP_PAUSE 50     // Pause between beeps in ms (faster sequence)
+#define LED_PIN 21        // GPIO21 for onboard LED (inverted logic)
 
 // ================================
 // NeoPixel Definitions - Xiao ESP32 S3
 // ================================
-#define NEOPIXEL_PIN 4   // GPIO4 (D3) for NeoPixel - confirmed safe pin on Xiao ESP32 S3
-#define NEOPIXEL_COUNT 1 // Number of NeoPixels (1 for single pixel)
+#define NEOPIXEL_PIN 4         // GPIO4 (D3) for NeoPixel - confirmed safe pin on Xiao ESP32 S3
+#define NEOPIXEL_COUNT 1       // Number of NeoPixels (1 for single pixel)
 #define NEOPIXEL_BRIGHTNESS 50 // Brightness (0-255)
 #define NEOPIXEL_DETECTION_BRIGHTNESS 200 // Brightness during detection (0-255)
 
@@ -45,15 +45,12 @@ int detectionFlashCount = 0;
 // ================================
 String AP_SSID = "snoopuntothem";
 String AP_PASSWORD = "astheysnoopuntous";
-#define CONFIG_TIMEOUT 20000   // 20 seconds timeout for config mode
+#define CONFIG_TIMEOUT 20000 // 20 seconds timeout for config mode
 
 // ================================
 // Operating Modes
 // ================================
-enum OperatingMode {
-    CONFIG_MODE,
-    SCANNING_MODE
-};
+enum OperatingMode { CONFIG_MODE, SCANNING_MODE };
 
 // ================================
 // Global Variables
@@ -64,8 +61,8 @@ Preferences preferences;
 NimBLEScan* pBLEScan;
 unsigned long configStartTime = 0;
 unsigned long lastConfigActivity = 0;
-unsigned long modeSwitchScheduled = 0; // When to switch modes (0 = not scheduled)
-unsigned long deviceResetScheduled = 0; // When to reset device (0 = not scheduled)
+unsigned long modeSwitchScheduled = 0;    // When to switch modes (0 = not scheduled)
+unsigned long deviceResetScheduled = 0;   // When to reset device (0 = not scheduled)
 unsigned long normalRestartScheduled = 0; // When to do normal restart (0 = not scheduled)
 
 // Serial output synchronization - avoid concurrent writes
@@ -73,7 +70,7 @@ volatile bool newMatchFound = false;
 String detectedMAC = "";
 int detectedRSSI = 0;
 String matchedFilter = "";
-String matchType = "";  // "NEW", "RE-3s", "RE-30s"
+String matchType = ""; // "NEW", "RE-3s", "RE-30s"
 
 // Persistent settings
 bool buzzerEnabled = true;
@@ -88,7 +85,7 @@ struct DeviceInfo {
     bool inCooldown;
     unsigned long cooldownUntil;
     const char* matchedFilter;
-    String filterDescription;  // Store filter description for persistence
+    String filterDescription; // Store filter description for persistence
 };
 
 struct TargetFilter {
@@ -128,7 +125,7 @@ bool isSerialConnected() {
 // ================================
 void ledOn() {
     if (ledEnabled) {
-        digitalWrite(LED_PIN, LOW);  // LOW = LED ON for Xiao ESP32-S3
+        digitalWrite(LED_PIN, LOW); // LOW = LED ON for Xiao ESP32-S3
     }
 }
 
@@ -146,7 +143,7 @@ void initializeBuzzer() {
     digitalWrite(BUZZER_PIN, LOW);
     ledcSetup(0, BUZZER_FREQ, 8);
     ledcAttachPin(BUZZER_PIN, 0);
-    
+
     // Setup LED (inverted logic - HIGH = OFF for Xiao ESP32-S3)
     pinMode(LED_PIN, OUTPUT);
     digitalWrite(LED_PIN, HIGH);
@@ -178,10 +175,11 @@ void singleBeep() {
 void threeBeeps() {
     // Start detection flash animation
     startDetectionFlash();
-    
-    for(int i = 0; i < 3; i++) {
+
+    for (int i = 0; i < 3; i++) {
         singleBeep();
-        if (i < 2) delay(BEEP_PAUSE);
+        if (i < 2)
+            delay(BEEP_PAUSE);
     }
 }
 
@@ -198,27 +196,51 @@ void initializeNeoPixel() {
 // Convert HSV to RGB
 uint32_t hsvToRgb(uint16_t h, uint8_t s, uint8_t v) {
     uint8_t r, g, b;
-    
+
     if (s == 0) {
         r = g = b = v;
     } else {
         uint8_t region = h / 43;
         uint8_t remainder = (h - (region * 43)) * 6;
-        
+
         uint8_t p = (v * (255 - s)) >> 8;
         uint8_t q = (v * (255 - ((s * remainder) >> 8))) >> 8;
         uint8_t t = (v * (255 - ((s * (255 - remainder)) >> 8))) >> 8;
-        
+
         switch (region) {
-            case 0: r = v; g = t; b = p; break;
-            case 1: r = q; g = v; b = p; break;
-            case 2: r = p; g = v; b = t; break;
-            case 3: r = p; g = q; b = v; break;
-            case 4: r = t; g = p; b = v; break;
-            default: r = v; g = p; b = q; break;
+        case 0:
+            r = v;
+            g = t;
+            b = p;
+            break;
+        case 1:
+            r = q;
+            g = v;
+            b = p;
+            break;
+        case 2:
+            r = p;
+            g = v;
+            b = t;
+            break;
+        case 3:
+            r = p;
+            g = q;
+            b = v;
+            break;
+        case 4:
+            r = t;
+            g = p;
+            b = v;
+            break;
+        default:
+            r = v;
+            g = p;
+            b = q;
+            break;
         }
     }
-    
+
     return strip.Color(r, g, b);
 }
 
@@ -227,13 +249,13 @@ void normalBreathingAnimation() {
     static unsigned long lastUpdate = 0;
     static float brightness = 0.0;
     static bool increasing = true;
-    
+
     unsigned long currentTime = millis();
-    
+
     // Update every 20ms for smooth animation
     if (currentTime - lastUpdate >= 20) {
         lastUpdate = currentTime;
-        
+
         // Update brightness (breathing effect)
         if (increasing) {
             brightness += 0.02;
@@ -248,7 +270,7 @@ void normalBreathingAnimation() {
                 increasing = true;
             }
         }
-        
+
         // Pink color (hue 300) with breathing brightness
         uint32_t color = hsvToRgb(300, 255, (uint8_t)(NEOPIXEL_BRIGHTNESS * brightness));
         strip.setPixelColor(0, color);
@@ -260,11 +282,11 @@ void normalBreathingAnimation() {
 void detectionFlashAnimation() {
     unsigned long currentTime = millis();
     unsigned long elapsed = currentTime - detectionStartTime;
-    
+
     // Calculate which flash we're on based on elapsed time
     int currentFlash = (elapsed / (BEEP_DURATION + BEEP_PAUSE)) % 3;
     unsigned long flashProgress = elapsed % (BEEP_DURATION + BEEP_PAUSE);
-    
+
     // Determine color based on flash number
     uint16_t hue;
     if (currentFlash == 0) {
@@ -274,7 +296,7 @@ void detectionFlashAnimation() {
     } else {
         hue = 270; // Purple
     }
-    
+
     // Flash brightness - bright during beep, dim during pause
     uint8_t brightness;
     if (flashProgress < BEEP_DURATION) {
@@ -284,12 +306,12 @@ void detectionFlashAnimation() {
         // During pause - dim
         brightness = NEOPIXEL_BRIGHTNESS / 4;
     }
-    
+
     // Set color
     uint32_t color = hsvToRgb(hue, 255, brightness);
     strip.setPixelColor(0, color);
     strip.show();
-    
+
     // End detection mode after 3 flashes (same as threeBeeps)
     if (elapsed >= (BEEP_DURATION + BEEP_PAUSE) * 3) {
         detectionMode = false;
@@ -324,17 +346,18 @@ void startDetectionFlash() {
 }
 
 void twoBeeps() {
-    for(int i = 0; i < 2; i++) {
+    for (int i = 0; i < 2; i++) {
         singleBeep();
-        if (i < 1) delay(BEEP_PAUSE);
+        if (i < 1)
+            delay(BEEP_PAUSE);
     }
 }
 
 void ascendingBeeps() {
     // Two fast ascending beeps to indicate "ready to scan"
     int frequencies[] = {1900, 2200}; // Close melodic interval, not octave
-    int fastPause = 100; // Faster than normal beeps
-    
+    int fastPause = 100;              // Faster than normal beeps
+
     for (int i = 0; i < 2; i++) {
         if (buzzerEnabled) {
             ledcSetup(0, frequencies[i], 8);
@@ -346,9 +369,10 @@ void ascendingBeeps() {
             ledcWrite(0, 0);
         }
         ledOff();
-        if (i < 1) delay(fastPause);
+        if (i < 1)
+            delay(fastPause);
     }
-    
+
     // Reset to original frequency for future beeps
     if (buzzerEnabled) {
         ledcSetup(0, BUZZER_FREQ, 8);
@@ -363,19 +387,19 @@ void saveConfiguration() {
     preferences.putInt("filterCount", targetFilters.size());
     preferences.putBool("buzzerEnabled", buzzerEnabled);
     preferences.putBool("ledEnabled", ledEnabled);
-    
+
     for (int i = 0; i < targetFilters.size(); i++) {
         String keyId = "id_" + String(i);
         String keyMAC = "mac_" + String(i);
         String keyDesc = "desc_" + String(i);
-        
+
         preferences.putString(keyId.c_str(), targetFilters[i].identifier);
         preferences.putBool(keyMAC.c_str(), targetFilters[i].isFullMAC);
         preferences.putString(keyDesc.c_str(), targetFilters[i].description);
     }
-    
+
     preferences.end();
-    
+
     if (isSerialConnected()) {
         Serial.println("Configuration saved to NVS");
     }
@@ -386,28 +410,28 @@ void loadConfiguration() {
     int filterCount = preferences.getInt("filterCount", 0);
     buzzerEnabled = preferences.getBool("buzzerEnabled", true);
     ledEnabled = preferences.getBool("ledEnabled", true);
-    
+
     targetFilters.clear();
-    
+
     // Load saved filters (no defaults - start empty)
     if (filterCount > 0) {
         for (int i = 0; i < filterCount; i++) {
             String keyId = "id_" + String(i);
             String keyMAC = "mac_" + String(i);
             String keyDesc = "desc_" + String(i);
-            
+
             TargetFilter filter;
             filter.identifier = preferences.getString(keyId.c_str(), "");
             filter.isFullMAC = preferences.getBool(keyMAC.c_str(), false);
             filter.description = preferences.getString(keyDesc.c_str(), "");
-            
+
             if (filter.identifier.length() > 0) {
                 targetFilters.push_back(filter);
             }
         }
     }
     // No default values - form starts empty (placeholder examples remain in HTML)
-    
+
     preferences.end();
 }
 
@@ -437,33 +461,35 @@ void normalizeMACAddress(String& mac) {
 bool isValidMAC(const String& mac) {
     String normalized = mac;
     normalizeMACAddress(normalized);
-    
+
     // Check for valid OUI (8 chars) or full MAC (17 chars)
     if (normalized.length() != 8 && normalized.length() != 17) {
         return false;
     }
-    
+
     // Basic format validation
     for (int i = 0; i < normalized.length(); i++) {
         char c = normalized.charAt(i);
         if (i % 3 == 2) {
-            if (c != ':') return false;
+            if (c != ':')
+                return false;
         } else {
-            if (!isxdigit(c)) return false;
+            if (!isxdigit(c))
+                return false;
         }
     }
-    
+
     return true;
 }
 
 bool matchesTargetFilter(const String& deviceMAC, String& matchedDescription) {
     String normalizedDeviceMAC = deviceMAC;
     normalizeMACAddress(normalizedDeviceMAC);
-    
+
     for (const TargetFilter& filter : targetFilters) {
         String filterID = filter.identifier;
         normalizeMACAddress(filterID);
-        
+
         if (filter.isFullMAC) {
             if (normalizedDeviceMAC.equals(filterID)) {
                 matchedDescription = filter.description;
@@ -485,73 +511,75 @@ bool matchesTargetFilter(const String& deviceMAC, String& matchedDescription) {
 void saveDeviceAliases() {
     preferences.begin("ouispy", false);
     preferences.putInt("aliasCount", deviceAliases.size());
-    
+
     for (int i = 0; i < deviceAliases.size(); i++) {
         String keyMac = "alias_mac_" + String(i);
         String keyName = "alias_name_" + String(i);
-        
+
         preferences.putString(keyMac.c_str(), deviceAliases[i].macAddress);
         preferences.putString(keyName.c_str(), deviceAliases[i].alias);
     }
-    
+
     preferences.end();
-    
+
     if (isSerialConnected()) {
-        Serial.println("Device aliases saved to NVS (" + String(deviceAliases.size()) + " aliases)");
+        Serial.println("Device aliases saved to NVS (" + String(deviceAliases.size()) +
+                       " aliases)");
     }
 }
 
 void loadDeviceAliases() {
     preferences.begin("ouispy", true);
     int aliasCount = preferences.getInt("aliasCount", 0);
-    
+
     deviceAliases.clear();
-    
+
     for (int i = 0; i < aliasCount; i++) {
         String keyMac = "alias_mac_" + String(i);
         String keyName = "alias_name_" + String(i);
-        
+
         DeviceAlias alias;
         alias.macAddress = preferences.getString(keyMac.c_str(), "");
         alias.alias = preferences.getString(keyName.c_str(), "");
-        
+
         if (alias.macAddress.length() > 0 && alias.alias.length() > 0) {
             deviceAliases.push_back(alias);
         }
     }
-    
+
     preferences.end();
-    
+
     if (isSerialConnected()) {
-        Serial.println("Device aliases loaded from NVS (" + String(deviceAliases.size()) + " aliases)");
+        Serial.println("Device aliases loaded from NVS (" + String(deviceAliases.size()) +
+                       " aliases)");
     }
 }
 
 String getDeviceAlias(const String& macAddress) {
     String normalizedMAC = macAddress;
     normalizeMACAddress(normalizedMAC);
-    
+
     for (const DeviceAlias& alias : deviceAliases) {
         String normalizedAliasMAC = alias.macAddress;
         normalizeMACAddress(normalizedAliasMAC);
-        
+
         if (normalizedAliasMAC.equals(normalizedMAC)) {
             return alias.alias;
         }
     }
-    
+
     return ""; // No alias found
 }
 
 void setDeviceAlias(const String& macAddress, const String& alias) {
     String normalizedMAC = macAddress;
     normalizeMACAddress(normalizedMAC);
-    
+
     // Check if alias already exists, update it
     for (auto& deviceAlias : deviceAliases) {
         String normalizedAliasMAC = deviceAlias.macAddress;
         normalizeMACAddress(normalizedAliasMAC);
-        
+
         if (normalizedAliasMAC.equals(normalizedMAC)) {
             if (alias.length() > 0) {
                 deviceAlias.alias = alias;
@@ -569,7 +597,7 @@ void setDeviceAlias(const String& macAddress, const String& alias) {
             return;
         }
     }
-    
+
     // Add new alias if not empty
     if (alias.length() > 0) {
         DeviceAlias newAlias;
@@ -584,38 +612,38 @@ void setDeviceAlias(const String& macAddress, const String& alias) {
 // ================================
 void saveDetectedDevices() {
     preferences.begin("ouispy", false);
-    
+
     // Limit to 100 most recent devices to avoid NVS overflow
     int deviceCount = min((int)devices.size(), 100);
     preferences.putInt("deviceCount", deviceCount);
-    
+
     for (int i = 0; i < deviceCount; i++) {
         String keyMac = "dev_mac_" + String(i);
         String keyRssi = "dev_rssi_" + String(i);
         String keyTime = "dev_time_" + String(i);
         String keyFilt = "dev_filt_" + String(i);
-        
+
         preferences.putString(keyMac.c_str(), devices[i].macAddress);
         preferences.putInt(keyRssi.c_str(), devices[i].rssi);
         preferences.putULong(keyTime.c_str(), devices[i].lastSeen);
         preferences.putString(keyFilt.c_str(), devices[i].filterDescription);
     }
-    
+
     preferences.end();
 }
 
 void loadDetectedDevices() {
     preferences.begin("ouispy", true);
     int deviceCount = preferences.getInt("deviceCount", 0);
-    
+
     devices.clear();
-    
+
     for (int i = 0; i < deviceCount; i++) {
         String keyMac = "dev_mac_" + String(i);
         String keyRssi = "dev_rssi_" + String(i);
         String keyTime = "dev_time_" + String(i);
         String keyFilt = "dev_filt_" + String(i);
-        
+
         DeviceInfo device;
         device.macAddress = preferences.getString(keyMac.c_str(), "");
         device.rssi = preferences.getInt(keyRssi.c_str(), 0);
@@ -625,14 +653,14 @@ void loadDetectedDevices() {
         device.inCooldown = false;
         device.cooldownUntil = 0;
         device.matchedFilter = nullptr;
-        
+
         if (device.macAddress.length() > 0) {
             devices.push_back(device);
         }
     }
-    
+
     preferences.end();
-    
+
     if (isSerialConnected()) {
         Serial.println("Detected devices loaded from NVS (" + String(deviceCount) + " devices)");
     }
@@ -640,11 +668,11 @@ void loadDetectedDevices() {
 
 void clearDetectedDevices() {
     devices.clear();
-    
+
     preferences.begin("ouispy", false);
     preferences.putInt("deviceCount", 0);
     preferences.end();
-    
+
     if (isSerialConnected()) {
         Serial.println("All detected devices cleared from memory and NVS");
     }
@@ -655,176 +683,176 @@ void clearDetectedDevices() {
 // ================================
 const char* getASCIIArt() {
     return R"(
-                                                                                                                                                                                                                                                                                                                            
-                                                                                                                                                                                                                                                                                                                            
-                                                                                                                                                                                                                                                                                                                            
-                                                                                                                                                                                                                                                                                                                            
-                                                                                                                                                                                                                                                                                                                            
-                                                                                                                                                                                                                                                                                                                            
-                                                                                                                                                                                                                                                                                                                            
-                                                                                                                                                                                                                                                                                                                            
-                                                                                                                                                                                                                                                                                                                            
-                                                                                                                                                                                                                                                                                                                            
-                                                                                                                                                                                                                                                                                                                            
-                                                                                                                                                                                                                                                                                                                            
-                                                                                                                                                                                                                                                                                                                            
-                                                                                                                                                                                                                                                                                                                            
-                                                                                                                                                                                                           @@@@@@@@                                                         @@@@@@@@                                        
-                                                                                                                                                                                                       @@@ @@@@@@@@@@                                                    @@@@@@@@@@ @@@@                                    
-                                              @@@@@                                                           @@@@@                                                                               @@@@ @ @ @@@@@@@@@@@@@                                               @@@@@@@@@@@@ @@@@@@@@                                
-                                         @@@@ @@@@@@@@                                                     @@@@@@@@@@@@@                                                                     @@@@ @@@@@@@@@@@@@@@@@@@@@@@@                                          @@@@@@@@@@@@@@@@@@@ @@@@@@@@@                           
-                                     @@@@@@@@ @@@@@@@@@@                                                 @@@@@@@@@@@@ @@ @@@@                                                            @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@                                    @@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@                       
-                                @@@@@@@@@@@@@@@@@@@@@@@@@@@                                           @@@@@@@@@@@@@@@@@@@@@@@@@@@                                                        @@@@@@ @@@@@@@@@          @@@@@@@@@@@@                                @@@@@@@@@@@@@          @@@@@@@@@@@@@@@                       
-                           @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@                                      @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@                                                   @@@@@@@@@ @@@               @@@@@@@@@@@@@                          @@@@@@@@@@@@@               @@@@@@@@@@@@@                       
-                          @@@ @@@@@@@@@@@@@       @@@@@@@@@@@@@@                                 @@@@@@@@@@@@@@      @@@@@@@@@@@@@@@@@@                                                  @@ @@@@@@@@@                  @@@@@@@@@@@@@@                     @@@@@@@@ @@@@                   @@@@@  @@@@                       
-                          @@@@ @@@@@@@@@              @@@@@@@@@@@@                            @@@@@@@@@@@@@              @@@@@@@@@ @@ @                                                  @@@@   @@@@                   @@@@@@@@@@@ @@                     @ @@@@@@@@@@@                    @@@@  @ @@                       
-                          @@@@@@@ @@@                   @@@@@@@@@@@@@                       @@@@@@@@@@@@@                  @@@@ @@@@@@@                                                   @@@  @@@@                     @@ @@@@@@@@@@                     @@@@@@@@@ @@@                     @@@  @@ @                       
-                          @@@@@  @ @@                   @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@                   @@@@  @@@@                                                    @@@  @@@@                     @@@  @@ @                              @ @@@@@                      @@@@ @@@@                       
-                           @@@   @@@                     @@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@                    @@@@   @@@                                                    @@@@ @@@@                    @@@@  @@@@                              @@@@@@@@                    @@@@@@@@@@                       
-                           @@@@ @@@@                     @@ @@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@   @@@                     @@@  @@@@                                                    @@@@ @@@@@                   @@@   @ @                                 @ @@@@@                  @@@@@@@@@@                        
-                           @@@@ @@@@                     @@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@  @@@                     @@@@ @@@@                                                    @@@@@@@ @@@                @@@@@   @ @                                 @ @ @@@@                @@@@@@@@@ @                        
-                           @@@@ @@@@@                   @@@ @ @                                @@@@  @@@@                   @@@@@ @@@@                                                     @@@@@@@@@@@@             @@@@@    @@@@                               @@@@  @@@@@            @@@@@@@  @  @                        
-                           @@@@ @@ @@@                 @@@@ @ @                                 @ @   @@@@                 @@@ @@@@@@                                                      @@@ @@@ @@@@@@@@     @@@@@@@@     @@@@                               @@@@   @@@@@@@@    @@@@@@@@ @@ @@@@@                        
-                            @@@@@@@@@@@@             @@@@@  @@@                                @@@@   @@@@@              @@@@@@@@@@@@                                                      @@@@@@@   @@@@@@@@@@@@@@@@@        @@@                               @@@      @@@@@@@@@@@@@@@@@  @@ @@@@@                        
-                            @@@@ @@ @@@@@@         @@@@@@   @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@     @@@@@@        @@@@@@@ @@ @@ @                                                      @@@@@@@       @@@@@@@@@  @@@@@@@            @@@@@@@@          @@@     @@@@  @    @@@@@@@@@@      @@ @@@@@                        
-                            @@ @@@@@ @@@@@@@@@@@@@@@@@@     @@@@@                             @@@@       @@@@@@@@@@@@@@@@@@   @@@@ @@                                                      @@@@@@@       @@@  @@   @@ @@@@@           @@@@  @ @          @ @     @@@@@@ @     @ @           @@ @ @@                         
-                            @@ @ @@@  @@ @@@@@@@@@@@@@@@@@@   @@@@@@@ @@@@@@@@ @@@@@@@@@@@@@@@@@@@        @@ @@@@@@@@@@@@@@@ @@@@@@@@                                                      @@ @@@@      @@@@@@@@@@  @@@@@@ @@@        @@@@@@@@@          @@@@@   @@@@   @@@   @@@@@@@@      @@ @@@@                         
-                            @@@@ @@@  @@@@     @@@@  @@@@@@     @ @@@@@   @@@@@@@@@        @@@@@@@@@@@@   @ @ @@@@@@@@@  @@@@@@@@@@@@                                                       @@@@@@@  @@@ @@  @@@@@@@@@    @@@@         @@@@@@@   @@@@@   @@@@@@ @@@  @ @@@@@@@@@@@@@@@      @@@@@ @                         
-                            @@@@@@@@  @@@@  @@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@  @@@@@@@@@@ @@@@@@@@ @ @@@@@@@@@@@@@@@ @@@@                                                        @@@@@@@  @ @ @@  @@@@@@@@@@   @@@@          @@@@@@   @@@@@   @@@@@@ @ @   @@@@@@@@ @@  @@@      @@@@@@@                         
-                             @@@@ @@  @ @ @@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@ @@@@ @@@@@@@@@@@ @@@@@@@@@@@@   @  @@@@@@@ @@@@@@ @@@@                                                        @ @@ @@  @@@@ @  @@@@@@@@@@@@@@@            @@@@@@   @@@@@   @@@@@@ @@@@  @@@  @@@@@@@@@@@      @@@@@@@                         
-                             @  @ @@  @@@@@@@@@@@@@@@ @@@@@@@ @@@@@@@@@@@@ @@@  @@@@@@@@@@@@@@@@@ @  @@ @@@@  @  @@@@@ @@@   @@ @@ @                                                        @ @@@@@  @@@ @@  @@@@@ @@ @ @@ @@           @@@@@@   @@@@@   @@@@@@@@@@           @@@@@@       @@@@  @                          
-                             @@ @ @@  @@@@@@@@@@@@@@@ @@@@@@@@@@@   @@@@@@ @@@@ @@ @@@@@@@@@@@@@@ @@@@@@@@@@  @@@@@@@@@@     @@@@@ @                                                        @@ @@@@  @@@@    @@@@@@   @@@@@@@           @  @@@   @@@@@   @@@@@@@@@@           @@@@ @       @@@@@@@                          
-                             @@@@@@@  @@@@@@    @@@ @ @@ @@@@@@@@@   @@@@@@@@@@ @@@@@@@@@@@ @@@@@ @ @@ @@@@@  @@@@@ @@       @@@@@@                                                          @@@@@@  @@@@    @@@@@@       @@@           @@@@@@   @@@@@   @@@@@@@@@@           @@@@@@       @@@@@@@                          
-                             @@ @@@@  @@@@@@@@@@@@@@@ @@@@@@@    @@@@@@ @@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@    @@@@@@@@       @@@@@@                                                          @@@@@@  @@@      @ @ @@@@@@  @@@@ @        @@@@@@   @@@@@   @@@  @@@@@   @@@@@@  @@@@         @@@@@@                           
-                              @  @@@  @@@@@@@@ @@@@@@ @@@@@@@    @@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@ @ @@@@@@    @@@@@@@@@      @@@@@@                                                          @@@@@@   @@@    @@@@ @ @@@@@@@@@@ @        @@@@@@   @@ @@      @ @@@@@@@@@@@@@@  @@@@ @       @@@@@@                           
-                              @@ @@@   @@@@@@@@@@@@   @@@@@@@     @@@@@@ @@@@@@@@@@@@@@    @@@@@@@@@@@@@@@    @@@@@@@@@      @@@@@@                                                           @@@@@   @ @    @@@@ @@@@@@@@@@@ @@        @@@@@@   @@@@@      @@@@@@@ @ @@@@@@  @@@@         @@@  @                           
-                              @@@@@@      @@@@ @@@       @@@@             @@@ @@@@@      @@@@   @   @@@       @@@  @@@@      @@@@@                                                            @@@@@   @@@     @@@     @@@@@@@           @@@                      @@@@@@@@@    @@@@         @@@@@@                           
-                              @@@@@@@        @@       @@@@@   @@@@@@      @@@@@@@@@@@@@@@@   @    @@@@@@@@@@@@              @@ @@@                                                            @@@ @                                                                                        @@@@@@                           
-                              @@@@@@@      @@@@@      @ @@@@@ @@@@@@@@@   @@@@@ @@@@ @@@@ @@@@   @@@@@@@@  @@@              @@@@@@                                                            @@@@@@             @@@@@@@@@    @@@   @@@    @@@@@@@@@    @@@@@@@@     @@@@@@@@@             @@@@@                            
-                               @  @@@      @@@@       @@@@@ @ @@@@@@@ @   @@@@@@@@@@@@@@@        @@@@@@@@@@@@@              @@@@ @                                                            @@@@@@             @@    @@@    @ @   @ @@@  @@@    @@    @@ @@@@@     @@@    @@@            @ @@@                            
-                               @@@@@@      @@@@       @@@@@@@ @@@@@@@@ @@@@@@@@      @@@@      @@@@@@@     @@ @@@@@         @@@@@@                                                            @@@@@@             @@@@@@@@@@@@ @@@   @@@@@  @@@@@@@ @@@@  @@@@@@@@@@@  @@@@@@ @@@@          @ @@@                            
-                               @@@@@@     @@@@@      @@@@@@@@ @@@@@@  @@ @@@@@@      @@@@      @@@@@@@@      @@@@@@         @@@@@                                                              @@@@@           @@@@@   @@ @@@ @@@@  @@@@@@@@@@   @@@@@@@@@@   @@@@@@@@@@   @@@@@@         @@@@ @                            
-                                 @@@@     @@@@@      @@@@@@@@ @@@@@@  @@@@@@@@@      @@@@      @@@@@@@@@@@@@@@@@@@@         @@@@@                                                              @@@ @           @@ @@@  @@@@@@ @@@@@ @@@ @@@@@@   @@@@@@@@@@   @@ @@@@@@@   @@@@@@         @@@@@@                            
-                                @@@@@     @@@@@@@@@@@@@@@@@@@ @@@@@@     @@@@@@     @@@@@@@     @@@@@@@@@@@@@@ @@@@         @ @ @                                                              @@@@@           @@@@@@ @  @@@@ @@@@  @@@@@@@@@@   @@@@@@@@@@   @@@@@@@@@@   @@@@@@         @@@@@@                            
-                                @@@ @     @@ @  @      @@@   @@@  @@      @@@@@     @@   @@         @@@@@@@@@  @@           @@ @@                                                              @@@@@              @@@  @  @@@ @@@  @@@@@@@@@@@   @@@ @@@@@@   @@ @@@@@@@   @@ @@@         @@@ @                             
-                                @   @        @@@@@@@@@@@@@    @@@@@@    @ @@@@@@@@  @@@@@@@         @@@@@@@@@@@@            @@@@@                                                              @@@@                       @ @@@@@  @ @@ @ @@@@    @@ @@@@@@    @@@@@@@@@                    @@@                             
-                                @@@@@      @@@@@@@@@@@@@@@@@@@  @@@@   @@@   @@@@@@  @@@@   @@@@@       @@@@@               @@@@@                                                               @@@                       @@@@@@@  @@@@@@@@@@@     @@@@@@@@    @@@@ @@@@                    @ @                             
-                                @@@@@      @@ @@@  @@@ @  @@ @  @@@@   @ @@@@@ @@@@  @@@@   @ @@@@@@   @@@@@@                @@@                                                                @@@               @@@        @@@@   @@@  @@@@@   @@@  @@@@@        @@@@@                   @@@@                             
-                                 @@@       @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@ @@@@@@@   @ @@@@@@@@@@@@@ @@               @@@                                                                @ @              @@@@@@@@@@@ @@@@   @@@@ @@@@@@@@@@@@@ @@@@  @@@@  @@@@@                   @@@@                             
-                                 @@@              @@@@@     @@@@@@@@@@@@@@@@@  @@@@@@@@@@   @@@@@@@@@@@@@@@@@@@@             @ @                                                                @ @              @@@@@@@@@ @  @ @   @@@     @@@@@@@@ @  @ @     @    @ @                   @ @                              
-                                 @ @              @@@@@     @@@@@@@@@@@@@@@@@  @@@@@@@@@@   @ @@@@@@@@@@ @@@@@ @             @ @                                                                @@@              @@@@@@@@@@@  @@@   @@@@    @@@@@@@@@@  @@@  @@@@    @@@                   @ @                              
-                                 @@@@             @@@@@     @@@@  @@@@@@@ @@@@@@@ @@ @@@@   @ @@@@@@@@@@@@@ @  @@@          @@@@                                                                 @@@                                                                                       @@@                              
-                                 @@@@            @@@@@@@      @@@@@@    @@@ @@@@@ @@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@          @@@                                                                  @ @  @@@    @@@   @@@@   @@@   @@@@@@@@@@@@ @@@@@@@@@@         @@@   @@@@   @@@@@@@@@     @@@                              
-                                  @@@  @@@@@@    @@@@ @@      @@@@@@    @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@ @@@@@@@  @@@                                                                  @@@  @ @    @@@@  @@@@   @@@@  @@@@@@@@  @@ @@ @ @ @@@@        @ @   @@@@   @@  @ @@@@   @@@@                              
-                                  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ @@    @@@@@@@@@@@ @ @@@@@@@ @@@@ @@@@@@ @@@@@@@@@@@@@@@@@@@@                                                                  @@@  @@@    @@@@  @@@@   @@@@  @@@@@@@@@@@@  @@@@@@@@@@        @@@   @@@@   @@@@@@@@@@   @@@@                              
-                                  @ @@@@@  @@@@@@ @@@@@        @@ @@@@@@ @@@@@     @ @@@@@@@@@@ @@  @@@       @@@@@@@@  @@@@@ @                                                                  @ @ @@@     @@@@@@@@@@@  @@@@     @@@ @@   @@@@    @@@@        @@@   @@@@@@ @@    @@@@@@ @@@                               
-                                  @@@@ @@@@@@ @@ @@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@   @@@ @                                                                  @@@@@@@@    @@@@@@@@@@@  @@@@@@   @@@@@@   @@@@@   @@@@@@    @@@@@   @@@@@@ @@@@ @@@ @ @ @@@                               
-                                  @@@@@@@@@@@@ @@ @          @@@@@@@@@@@                 @@@@@@@ @@@          @ @@@@@@@@@@@@@@                                                                    @@@@@@@@   @@@@@@@@@@@  @@@@ @   @@ @@@   @@@@@   @@@@@@    @@ @@   @@ @@@ @@@@ @ @  @@ @@@                               
-                                  @@@@@@@@@@@@@@@@@        @@@@@@@@@                          @@@@@@@@        @ @@@@ @@@@@@@@@                                                                    @@@@@@@    @@@@@@@@@    @@@@@@   @@@@@@   @@@@@   @@@@@@    @@@@@   @@@@@@ @@@@ @@@@   @@@                                
-                                   @@@@@@@@@@@@@ @@      @@@@@@@                                @@@@@@@@      @@@ @@@@@@@@@@@@                                                                    @@@@@@@     @ @ @@@@@   @@@ @@   @@@@@    @@@@@    @@@@@    @@@@@   @@@@@@       @@@@@@@@@                                
-                                   @@@@@@@@@@@@@@@@@   @@@  @@@@                                 @@@@@@@@@    @@@@@@@@@@@@@@@@                                                                    @ @@@@@     @ @ @@@@@   @ @@ @    @ @@    @@@@@   @@@@ @    @@@@@   @@@  @  @@@  @ @@ @@ @                                
-                                   @@@ @@@@@@@@@@@@@ @@@@@@@@@                                      @@@@@@@@ @@@@ @@@  @@@@@@                                                                      @ @@@@    @@@@ @@@@@   @ @@@@   @@@@     @@@@@   @ @@@@    @@@@@   @@@@@@  @ @  @ @@@ @@@                                
-                                   @@@@@@@@@@@@@ @@@@@@  @@                                         @@@@@ @@@@@@   @@@@@@@@@@                                                                      @@@@@  @@@@@@@ @@@@    @ @      @ @      @@@ @@@@@@@       @@@@@@@@@ @  @  @@@@@@ @  @@@@                                
-                                    @@@@@@@@@@@@ @@@@@@@@@@                                          @@ @@@ @@@@   @@@@@@@@@@                                                                      @@@    @@@ @ @ @@@@    @ @      @ @      @@@@@@@@@ @           @@@@@ @ @@  @@@@ @ @  @ @                                 
-                                    @@@  @@@@@   @@@@@ @@@                                            @@ @@@@@@@   @@ @@@ @@@                                                                      @@@@@@ @@@ @@@ @@@@    @@@      @@@       @@@@@@@@@@           @@@@@@@     @@@@ @@@@@@@@                                 
-                                    @@@@@@@ @@   @@@@ @@@@                                             @@@@ @@@@   @@@@@@@@@@                                                                       @@@@@   @@@                              @@@@                               @@@   @@@@@                                 
-                                    @@@  @@@@@@@@    @@@@    @@@@@@@                       @@@@@@@@@@@  @ @     @@@@@@@@ @@@                                                                        @ @@@  @@@@                              @@@@                               @@@  @@ @@@                                 
-                                      @@ @@@@@ @@    @@@@  @@@@@@@@@@                      @@@@@@@@@@@  @@@@    @@ @@@@@ @@@                                                                        @@ @@  @@@@        @@@@                  @@@@                   @@@@        @ @  @@@@@@                                 
-                                     @@@ @@@@@ @@    @ @   @@@@   @@@@                     @@       @@   @@@   @@@ @@@@@ @ @                                                                        @@@@@@ @@@         @@@@@@                @@@@@                @@@@@@        @ @  @@@ @                                  
-                                     @@@  @@@@ @@    @ @   @@      @@@                     @@       @@   @ @   @@@ @@@@  @ @                                                                        @@@@@@ @@@         @@@@@@@             @@@@@@@@             @@@@ @@@        @@@@ @@@ @                                  
-                                     @@@@ @@@@@@@    @ @   @@@@  @@@@@                     @@       @@   @@@   @@@@@@@@  @@@                                                                        @@@@@@ @@@          @@@@@@@@@@@@@@@@@ @@@@@ @@@@@@@@@@@@@@@@@@ @@@@         @@@@@@@@ @                                  
-                                     @@ @@@@@@@@     @@@@ @@@@@@@@@@@                      @@@@@@@@@@@@ @@@@     @@@@@@@@@@                                                                          @ @@@ @@@           @@@@@@@@@   @@@@@@@@@@@@@@@@@@@@@  @@@@@@@@@            @@@@@@@@@                                  
-                                      @@@ @@ @@@     @@@@@  @@@@@@@@                       @@@@@@@@@@@@@@ @      @@@@@   @@                                                                          @@@@@@@@@             @@@@@@@@@@@@ @@@ @@@@@@@@@@@ @@@@@@@@@@@              @@@@@@@@@                                  
-                                      @@@@@@@@@@      @@@@@@                                   @@@   @@@@@@      @@@@@@@@ @                                                                          @@@@@@@@@              @@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@              @ @@@@@@@                                  
-                                      @@@ @@@@@       @@@@@                                  @@@@@@@  @@@@@       @@@@ @@@@                                                                          @ @@@@@@@              @@ @@@@ @@@@@ @@@     @@ @@@@@@@@@@@@@               @ @@@@ @                                   
-                                      @ @@@@@@@@@@    @@@@@                                  @@@ @@@ @@@@@@    @@@@@@@@@@@@                                                                          @@@ @@@@               @@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@ @@@@               @ @@@@ @                                   
-                                      @@@@@@@@@ @@   @@@@@@                                  @@@@@@@ @@@@@@@   @@ @@@@@@@@@                                                                           @@@@@@@                @@@@@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@               @@@@@@@@                                   
-                                      @@@@@@@@@@@@   @@@@@ @@@                                 @@@   @@@ @ @   @@@@@@@@@@@                                                                            @@@@@@@                @@@@@@@@@   @@@@@@@@@@@@@  @@@@@@@@@@               @@@@ @@@                                   
-                                       @ @@@@@@@@@   @@ @@@@@@                                        @ @@@ @@ @@@@@@@@@@@                                                                            @ @@@@@              @@@@@@@ @@       @@@@@@@@@@   @@@@@@ @@@              @@@@@@@@                                   
-                                       @@@@@@@@@@@ @@ @@@@@@@@@@@@                             @@@    @@@@@@ @@@@@@@@ @@@@                                                                            @ @@@@@            @@@@@@@@@@@@       @@@@@@@@@    @@@@@@@@@@@@@            @@@@ @                                    
-                                       @ @@@@@@@@@@@ @@ @ @@@ @@@@@@                        @@@@ @ @   @@@  @ @@@@@@@@@  @                                                                            @@@ @@@          @@@@ @@@@@@@@@       @@@@@@@@     @@@@@@@@@ @@@@@          @@@@@@                                    
-                                       @@@@ @@@@ @@@@@@@@   @@@@@@@@ @@@@               @@@@@ @@@@     @@@  @@@@ @@@@@@@@@                                                                             @@@     @@@@@@@@@@@@@ @@@@@@@@    @@@@@@@@@@@@    @@@@@@@@@@@@@@@@@@@@@@      @@@                                    
-                                       @@@@ @@@@ @ @ @@@@     @@@@@@@@@@@ @@@@@@@@@ @@@ @@@@@@@@       @@@@ @@@@ @@@  @@@                                                                              @ @     @@      @@@@@@@  @@@@@    @@  @@@@@@@@    @@@@@   @@@@@@@     @@      @ @                                    
-                                        @ @ @@@@ @ @ @ @        @@@ @ @@@ @@@@@@ @@ @ @ @@@@  @@       @@@@ @@@@ @@@@@@@@                                                                              @@@     @@@@@@@@@@@@@@@@@@@@@@    @@@@@@@@@@@@    @@@@@@@@@@@@@@@@@@@@@@     @@@                                     
-                                        @@@      @ @ @@@         @@@@@@@  @@@@@@@@@ @@@  @  @           @@@ @@@@     @@@@                                                                                               @@@@@ @@@@@@@        @@@@        @@@@@@@@ @@@@              @@@                                     
-                                        @@@      @ @ @@@            @@ @@@                @@            @@@ @@@@     @@@                                                                               @ @                @@@@@ @@@@@       @@@@@@@      @@@@@@@@@@@                @ @                                     
-                                        @@@      @ @ @ @             @@@ @                              @@@ @@@@     @@@                                                                               @ @                   @@@@@@@@       @@@@@@@      @@@@@@@@@                  @ @                                     
-                                        @ @   @@@@ @ @@@               @@@                              @@@ @@@@@@   @@@                                                                               @@@                     @@@@@@     @@@@@@@@@@@    @@@@@@@                    @@@                                     
-                                        @ @ @@@ @@ @                                                        @@@@ @@@@@@@                                                                               @@@                     @@@@@@     @@ @@@@  @@    @@@@@@@                    @@@@                                    
-                                        @@@@@ @@@@@@@   @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@   @ @@@@@ @@@@                                                                               @@@                   @@@@@@@@     @@@@@@@@@@@    @@@@@@@@@                   @@@                                    
-                                        @@@ @@    @ @@ @@@                                             @@  @@ @   @@@@@@                                                                              @@@@                @@@@@ @@@@@        @@@@        @@@@@@@@@@@                 @@@                                    
-                                        @@@@@      @ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ @ @@      @@@@@                                                                             @ @               @@@@@ @@@@@@@      @@@@@@@@@     @@@@@@@@ @@@@@              @ @                                    
-                                        @@@@@@@@@@@@@@@  @                                            @ @@ @@@@@@@@@@@@@@                                                                             @@@      @@@@@@@@@@@@@@@@@@@@@@      @ @@@@@ @     @@@@@@@ @@@@@@@@@@@@@@      @@@@                                   
-                                       @@@@@@@@@@@@@@@   @                                            @ @@ @ @@@@@@@@ @@@                                                                             @@@      @@      @@@ @@@  @@@@@      @@@@@@@@@     @@@@@   @@@ @@@     @@      @@@@                                   
-                                       @@@@@@@@   @@@@   @                                            @ @@ @ @@   @@@ @@@@                                                                            @ @      @@@@@@@@@@@@@@@@@@@@@@        @@@@@       @@@@@@@@@@@@@@@@@@@@@@       @@@                                   
-                                       @@  @@@@@@@@@@@   @                                            @ @@ @ @@@@@@@@  @ @                                                                           @@@@              @@@@@@@@@@@@@@        @@@@        @@@@@@@@@@@@@@@              @@@                                   
-                                       @@@ @@@@@@@@@ @   @                                            @ @@ @ @@@@@@@@  @@@                                                                           @@@                 @@@@@@@@@@@@        @@@@@@      @@@@@@@@@@@@                 @ @                                   
-                                       @ @ @   @@@   @   @                                            @ @@ @   @@@     @@@                                                                           @@@                  @@ @@@@@ @@        @@@@        @@@@@@@@@@@                  @ @                                   
-                                       @   @@@@@@@@@ @   @                                            @ @@ @ @@@@@@@   @ @                                                                           @ @                  @@@@@@@@ @@@       @@@@       @@@@@@@@@@@@                  @@@@                                  
-                                      @@@@ @@@@@@@@@@@   @                                            @ @@ @@@@@@@@@@  @@@@                                                                          @@@                  @@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@                 @@@@                                  
-                                      @@@@ @@@@   @@@@   @                                            @ @@ @@@@   @@@   @@@                                                                          @@@                  @@@@@@@@@@@ @@@@   @@@@   @@@@@@@@@ @@@@@@@                  @ @                                  
-                                      @@@@ @@@@@@@@@@@   @                                            @ @@ @@@@@@@@@@   @@@                                                                         @@@@                  @@@@@ @@@@@@@ @@@@@@@@@@@@@@  @@@@@@@@@@@@@                  @@@                                  
-                                      @@@@ @@@@@@@@@ @   @                                            @ @@ @ @@@@@@@@   @ @                                                                         @@@                  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@  @@@                 @ @                                  
-                                      @ @@ @         @   @                                            @ @@ @            @@@                                                                         @@@                @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@                @@@@                                 
-                                     @@@@@ @@@@@@@@@ @   @                                            @ @@ @ @@@@@@@@   @@@                                                                         @@@              @@@@ @@@@@@@@@@@   @@@@ @@@@@@@@@   @@@@@@@@@@@@@@@@              @@@@                                 
-                                     @@@@@ @@@@@@@@@@@   @                                            @ @@ @@@@@@@@@@   @@@@                                                                        @ @              @@@@@@@              @@@@@@@@@@@             @@@@ @@               @ @                                 
-                                     @ @ @ @@@    @@@@   @                                            @ @@ @@@@   @@@    @@@                                                                        @@@              @@@@@                 @@@@@@@@                 @@@@@@              @@@                                 
-                                     @@@ @ @@@@@@@@@@@   @                                            @ @@ @@@@@@@@@@    @@@                                                                       @@@               @@@@                    @@@@@                    @@@               @@@                                 
-                                     @@@ @ @@@@@@@@@ @   @                                            @ @@ @ @@@@@@@@    @@@                                                                       @ @                                       @@@@                                       @ @                                 
-                                    @@@  @ @  @@@@   @   @                                            @ @@ @   @@@@      @ @                                                                       @@@                                       @@@@                                       @@@@                                
-                                    @@@  @ @@@@@@@@@ @   @                                            @ @@ @ @@@@@@@@    @@@                                                                       @ @                   @@@ @@@             @@@@@@           @@@ @@@@                  @@@@                                
-                                    @@@  @ @@@@@@@@@@@   @                                            @ @@ @@@@@@@@@@     @@@                                                                     @ @                    @ @@@ @@@          @@@@@@@          @@ @@@@@@                @@@@ @                                
-                                    @@@  @ @@@@  @@@@@   @                                            @ @@ @@@@   @@@     @ @                                                                     @@@@@@@                @@@@@@@ @          @ @ @ @        @@@@@@@@@@@                @@@@@@                                
-                                   @@@@@@@ @@@@@@@@@@@   @                                            @ @@ @@@@@@@@@@     @@@                                                                     @@@@@@@                   @ @@@@@@@       @ @ @ @       @@ @@@@@@@ @                @@@@@@                                
-                                   @@@@@@@ @@@@@@@@@ @   @                                            @ @@@@@@@@@@@@   @@@@@@                                                                     @@    @                @  @@@ @ @ @@@     @ @ @ @     @@@@@ @@@@ @ @               @@@@@@@@                               
-                                   @@@@@@@ @  @@@@   @   @                                            @ @ @@@@@@@@@    @@@@@@                                                                    @@@@   @                @    @@@@@@@ @     @ @ @ @   @@@ @  @@@@  @ @               @@@@@@@@                               
-                                   @@@@@@  @@@@@@@@@ @   @                                            @ @  @@@@@@@@@@  @@@@@@@                                                                   @ @@   @                @ @    @@ @@@@@@@  @ @ @ @  @@ @@@@@@@    @ @               @@  @  @                               
-                                   @ @@@@  @@@@@@@@@@@   @                                            @ @   @@@@@@@@@  @@@@@@@                                                                   @@@@@  @                @ @     @@@ @ @ @@ @ @ @ @@@@@@ @ @@      @ @               @@  @@@@@                              
-                                  @@@@@@@  @@@@  @@@@@   @                                            @ @   @@@   @@@  @@@@@@@                                                                   @@@@@ @@@               @ @       @@@@@@@@@@ @ @ @@ @ @ @@@       @ @               @@  @@@@@                              
-                                  @@@ @@@  @@@@@@@@@@@   @                                            @ @   @@@@@@@@@  @@@@@@@                                                                   @ @@@ @@@               @ @         @@ @@@ @ @ @ @@@@@@@@         @ @               @@  @@@@@                              
-                                  @@@@@@@  @@@@@@@@@@ @@ @                                            @ @    @@@@@@@   @@@@@@ @                                                                 @@@@@@ @@@               @ @          @@@ @@@   @@@@@ @            @ @              @@@  @@@@@                              
-                                  @@@@@ @  @  @@@@@@ @@@ @                                            @ @     @@@@@    @@ @@                                                                    @@@@@@ @@@               @ @            @@@@@@  @@@ @@@            @ @              @@@   @  @                              
-                                  @ @@@ @  @@@@@@@@@@  @ @                                            @ @    @@@@@@@@  @@ @@@@@                                                                 @@ @@@ @@@@              @ @              @@ @  @@ @@              @ @              @@    @@@@                              
-                                  @ @@@ @  @@@@@@@@@@  @ @                                            @ @   @@@@ @@@@  @@ @@@ @                                                                 @ @@ @ @@@@              @ @               @@@@ @@@                @ @             @@@    @@@@@                             
-                                 @@@@@@ @  @@@@  @@@@  @ @                                            @ @   @@@@ @@@@  @@ @@ @@@                                                                @@@@ @ @ @@              @ @                @ @ @ @                @ @             @@@    @@@@@                             
-                                 @@@@@  @  @@@@@@@@@   @ @                                            @ @   @@@@@@@@@  @@ @@@@@@                                                                @@@@ @ @ @@              @ @                @ @ @ @                @ @             @@@     @  @                             
-                                 @@@@@  @  @ @@@@@@    @ @                                            @ @   @@@@@@@   @@  @@@@@                                                               @@@@  @ @ @@@                                @ @ @ @                @ @             @@      @@@@                             
-                                 @@ @@  @  @ @@@@@@    @ @                                            @ @   @@@@@    @@  @@@ @                                                               @@@@  @ @ @@@             @@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@             @@      @@@@                             
-                                 @ @@@  @  @@@@@@@@@   @ @                                            @ @   @@@@@@@@  @@  @@@@@                                                               @@@@  @ @  @@   @@@@@@@@@@@@                 @@@ @@@                @@@ @@@@@@@@@  @@@       @@@@                            
-                                @@@@@   @  @@@@@ @@@   @ @                                            @ @   @@@@ @@@@  @@  @@ @@                                                               @@@@  @ @  @@@@@@@@@ @@@  @@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@ @@  @@@ @   @@@       @@@@                            
-                                @@@@@   @  @@@@  @@@   @ @                                            @ @   @@@@ @@@@  @@   @@@@@                                                              @@@   @ @  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@ @@        @@@@                            
-                                @ @@@   @  @@@@@@@@@   @@@                                            @@@    @@@@@@@@  @@   @@@@@                                                              @@@   @ @  @@@ @@@@ @@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ @@        @@@@                            
-                                @@@@@   @@@@ @@@@@@     @                                             @@@    @@@@@@@@@@@@   @@@@@                                                             @@@@   @ @  @@@@@@@@@@@@@@@@@@@@@@ @@@@@ @@@@@ @@@@ @@@@@@@ @  @ @@@@@@@@@@@@@@@@@@ @@         @@@                            
-                                @@@@    @@@@@                                                                       @@@@@   @@@@@                                                             @@@@   @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@     @@@                            
-                                 @@@    @@@ @@@                                                                   @@@@@@@   @@@ @                                                             @@@@   @@@ @@@@@@@@@@@@@@@@@@@@@@@ @@        @@@@ @@@@       @@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@   @@@@                           
-                               @@@@@    @@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@    @@@@                                                             @@@  @@@@@@@@@@@@@@@@@@@@@ @@@@    @@@@@@@@@@@@@@@@@@@@@@@@@@@@    @@@@  @@@@@@@@@@@@@@@@@@@@@ @@@@                           
-                               @@@@   @@@@@@@@@@@@@@        @@@                                   @@@        @@@@@@@@@@@@@@  @@@@@                                                            @@@@@@@@@@@         @@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@  @@@@@@        @@@@@ @@  @@                           
-                               @@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@  @@ @                                                           @@@@@@@@@              @@@@@@@@@@@@@@@@@@@@@@@@@@  @@@@@@@@@@@@@@@@@@@@@ @@@@              @@@@@@@@@                           
-                              @@@@@@@@@@@@@       @@@@@@@@@@@@@ @                               @ @ @@@@@@@@@@@      @@@@@@@@@@@@@                                                           @@@@@@@@                 @@@@@@@@                                   @@@@@@@                  @@@@@@@                           
-                              @ @@@@@@@@             @@@@ @@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@  @  @@@@             @@@@@@@@@                                                           @@@ @@@                   @@@@@ @                                   @ @@@@                    @@@@ @@                          
-                              @@@@@@@@                 @@@@@@@@@                                 @@  @ @@                  @@@@@@@                                                          @@@@@@@                     @@@@ @                                   @ @@@@                     @@ @@@                          
-                              @@@ @@@                    @@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@                    @@@@@@@                                                         @ @ @@                      @@@@ @                                   @ @@@                      @@ @@@                          
-                              @ @@@@                     @@@@ @                                   @ @@@@                    @@@ @@@                                                         @@@ @@@                     @@ @ @                                   @ @@@@                    @@@ @@@                          
-                             @@@@@@@                     @@ @ @                                   @ @@@@                     @@ @@@                                                         @@@@@@@@                   @@@ @ @                                   @ @@@@@                   @@@@@@@@                         
-                             @@@@@@@                     @@ @ @                                   @ @@@@                     @@ @@@                                                         @ @@@@@@@                 @@@@@@ @                                   @ @@@@@@                @@@ @@@@ @                         
-                             @@@@@@@@                   @@@@@ @                                   @ @@@@@                   @@@@ @ @                                                        @@@@@@@@@@@             @@@@@@@@ @                                   @ @@@@@@@@            @@@@@@@@@@@@                         
-                             @@@@@@@@@                 @@@@@@ @                                   @ @@@@@@                 @@@@@  @                                                        @@@@@ @@@@@@@@@       @@@@@@@@@@@@@                                   @@@@ @@ @@@@@      @@@@@@@@@ @@@@@                         
-                             @ @@@@@@@@               @@@@@@@ @                                   @ @@@@@@               @@@@@@@ @@@                                                       @ @@@  @@@@@@@@@@@@@@@@@@@@ @@@@@@@                                   @@@@@ @@@@@@@@@@@@@@@@@@@@@  @@@ @                         
-                             @@@@@ @@@@@@@         @@@@@@@@@@ @                                   @ @@ @@@@@@@         @@@@ @@@@ @ @                                                       @ @@@     @@@@ @@@@@@@ @@@@@@@@@@@                                     @@@@@@@@@@@@@@@@@@@@@@@     @@@ @                         
-                            @@@@@@  @@@@@@@@@@@@@@@@@@@@@@@@@@@                                   @@@@@@@@@@@@@@@@@@@@@@@@@@@ @@ @@@                                                       @ @@@@@@@     @@@@@@@@@@@@@@@@@                                          @@@@@@@ @@@@@@@@@     @@@@@@@@@                         
-                            @@@@@@    @@@@@@@@@@@@@@@@@@@@@@@@@                                   @@@@@@@@@ @@@@@@@@@@@@@@@   @@  @@@                                                      @@@@@@@@@@@@@  @@@@@@ @@@@@@                                                @@@@@@@@@@@@@  @@@@@@@@@@@@@                         
-                            @@@@@@@@@      @@@@@@@@@@@@@@@@@                                         @@@@@@@@@@@@@@@@@     @@@@@@@@ @                                                          @@@@@@@@@@@@@@ @@@@@@                                                      @@@@@@ @@@@@@@@@@@@@@@                            
-                            @@@@@@@@@@@@@@   @@@@@ @@@@@@                                              @@@@@@@ @@@@@   @@@@@@@@@@@@@@                                                              @@@@@@@@@@@@@@                                                            @@@@@@@@@@@@@@@                                
-                               @@@ @@@@@@@@@@@@@@ @@@@                                                     @@@@  @@@@@@@@@@@@@@@@@                                                                      @@@@@@                                                                  @@@@@@@                                     
-                                   @@@ @@@@@@@@@@@@                                                           @@@@@@@@@@@@@@@@                                                                                                                                                                                              
-                                       @@@@  @@@                                                                @@@@ @@@@@                                                                                                                                                                                                  
-                                                                                                                    @                                                                                                                                                                                                       
-                                                                                                                                                                                                                                                                                                                            
-                                                                                                                                                                                                                                                                                                                            
-                                                                                                                                                                                                                                                                                                                            
-                                                                                                                                                                                                                                                                                                                            
-                                                                                                                                                                                                                                                                                                                            
-                                                                                                                                                                                                                                                                                                                            
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                                                                                                                                                                           @@@@@@@@                                                         @@@@@@@@
+                                                                                                                                                                                                       @@@ @@@@@@@@@@                                                    @@@@@@@@@@ @@@@
+                                              @@@@@                                                           @@@@@                                                                               @@@@ @ @ @@@@@@@@@@@@@                                               @@@@@@@@@@@@ @@@@@@@@
+                                         @@@@ @@@@@@@@                                                     @@@@@@@@@@@@@                                                                     @@@@ @@@@@@@@@@@@@@@@@@@@@@@@                                          @@@@@@@@@@@@@@@@@@@ @@@@@@@@@
+                                     @@@@@@@@ @@@@@@@@@@                                                 @@@@@@@@@@@@ @@ @@@@                                                            @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@                                    @@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@
+                                @@@@@@@@@@@@@@@@@@@@@@@@@@@                                           @@@@@@@@@@@@@@@@@@@@@@@@@@@                                                        @@@@@@ @@@@@@@@@          @@@@@@@@@@@@                                @@@@@@@@@@@@@          @@@@@@@@@@@@@@@
+                           @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@                                      @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@                                                   @@@@@@@@@ @@@               @@@@@@@@@@@@@                          @@@@@@@@@@@@@               @@@@@@@@@@@@@
+                          @@@ @@@@@@@@@@@@@       @@@@@@@@@@@@@@                                 @@@@@@@@@@@@@@      @@@@@@@@@@@@@@@@@@                                                  @@ @@@@@@@@@                  @@@@@@@@@@@@@@                     @@@@@@@@ @@@@                   @@@@@  @@@@
+                          @@@@ @@@@@@@@@              @@@@@@@@@@@@                            @@@@@@@@@@@@@              @@@@@@@@@ @@ @                                                  @@@@   @@@@                   @@@@@@@@@@@ @@                     @ @@@@@@@@@@@                    @@@@  @ @@
+                          @@@@@@@ @@@                   @@@@@@@@@@@@@                       @@@@@@@@@@@@@                  @@@@ @@@@@@@                                                   @@@  @@@@                     @@ @@@@@@@@@@                     @@@@@@@@@ @@@                     @@@  @@ @
+                          @@@@@  @ @@                   @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@                   @@@@  @@@@                                                    @@@  @@@@                     @@@  @@ @                              @ @@@@@                      @@@@ @@@@
+                           @@@   @@@                     @@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@                    @@@@   @@@                                                    @@@@ @@@@                    @@@@  @@@@                              @@@@@@@@                    @@@@@@@@@@
+                           @@@@ @@@@                     @@ @@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@   @@@                     @@@  @@@@                                                    @@@@ @@@@@                   @@@   @ @                                 @ @@@@@                  @@@@@@@@@@
+                           @@@@ @@@@                     @@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@  @@@                     @@@@ @@@@                                                    @@@@@@@ @@@                @@@@@   @ @                                 @ @ @@@@                @@@@@@@@@ @
+                           @@@@ @@@@@                   @@@ @ @                                @@@@  @@@@                   @@@@@ @@@@                                                     @@@@@@@@@@@@             @@@@@    @@@@                               @@@@  @@@@@            @@@@@@@  @  @
+                           @@@@ @@ @@@                 @@@@ @ @                                 @ @   @@@@                 @@@ @@@@@@                                                      @@@ @@@ @@@@@@@@     @@@@@@@@     @@@@                               @@@@   @@@@@@@@    @@@@@@@@ @@ @@@@@
+                            @@@@@@@@@@@@             @@@@@  @@@                                @@@@   @@@@@              @@@@@@@@@@@@                                                      @@@@@@@   @@@@@@@@@@@@@@@@@        @@@                               @@@      @@@@@@@@@@@@@@@@@  @@ @@@@@
+                            @@@@ @@ @@@@@@         @@@@@@   @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@     @@@@@@        @@@@@@@ @@ @@ @                                                      @@@@@@@       @@@@@@@@@  @@@@@@@            @@@@@@@@          @@@     @@@@  @    @@@@@@@@@@      @@ @@@@@
+                            @@ @@@@@ @@@@@@@@@@@@@@@@@@     @@@@@                             @@@@       @@@@@@@@@@@@@@@@@@   @@@@ @@                                                      @@@@@@@       @@@  @@   @@ @@@@@           @@@@  @ @          @ @     @@@@@@ @     @ @           @@ @ @@
+                            @@ @ @@@  @@ @@@@@@@@@@@@@@@@@@   @@@@@@@ @@@@@@@@ @@@@@@@@@@@@@@@@@@@        @@ @@@@@@@@@@@@@@@ @@@@@@@@                                                      @@ @@@@      @@@@@@@@@@  @@@@@@ @@@        @@@@@@@@@          @@@@@   @@@@   @@@   @@@@@@@@      @@ @@@@
+                            @@@@ @@@  @@@@     @@@@  @@@@@@     @ @@@@@   @@@@@@@@@        @@@@@@@@@@@@   @ @ @@@@@@@@@  @@@@@@@@@@@@                                                       @@@@@@@  @@@ @@  @@@@@@@@@    @@@@         @@@@@@@   @@@@@   @@@@@@ @@@  @ @@@@@@@@@@@@@@@      @@@@@ @
+                            @@@@@@@@  @@@@  @@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@  @@@@@@@@@@ @@@@@@@@ @ @@@@@@@@@@@@@@@ @@@@                                                        @@@@@@@  @ @ @@  @@@@@@@@@@   @@@@          @@@@@@   @@@@@   @@@@@@ @ @   @@@@@@@@ @@  @@@      @@@@@@@
+                             @@@@ @@  @ @ @@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@ @@@@ @@@@@@@@@@@ @@@@@@@@@@@@   @  @@@@@@@ @@@@@@ @@@@                                                        @ @@ @@  @@@@ @  @@@@@@@@@@@@@@@            @@@@@@   @@@@@   @@@@@@ @@@@  @@@  @@@@@@@@@@@      @@@@@@@
+                             @  @ @@  @@@@@@@@@@@@@@@ @@@@@@@ @@@@@@@@@@@@ @@@  @@@@@@@@@@@@@@@@@ @  @@ @@@@  @  @@@@@ @@@   @@ @@ @                                                        @ @@@@@  @@@ @@  @@@@@ @@ @ @@ @@           @@@@@@   @@@@@   @@@@@@@@@@           @@@@@@       @@@@  @
+                             @@ @ @@  @@@@@@@@@@@@@@@ @@@@@@@@@@@   @@@@@@ @@@@ @@ @@@@@@@@@@@@@@ @@@@@@@@@@  @@@@@@@@@@     @@@@@ @                                                        @@ @@@@  @@@@    @@@@@@   @@@@@@@           @  @@@   @@@@@   @@@@@@@@@@           @@@@ @       @@@@@@@
+                             @@@@@@@  @@@@@@    @@@ @ @@ @@@@@@@@@   @@@@@@@@@@ @@@@@@@@@@@ @@@@@ @ @@ @@@@@  @@@@@ @@       @@@@@@                                                          @@@@@@  @@@@    @@@@@@       @@@           @@@@@@   @@@@@   @@@@@@@@@@           @@@@@@       @@@@@@@
+                             @@ @@@@  @@@@@@@@@@@@@@@ @@@@@@@    @@@@@@ @@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@    @@@@@@@@       @@@@@@                                                          @@@@@@  @@@      @ @ @@@@@@  @@@@ @        @@@@@@   @@@@@   @@@  @@@@@   @@@@@@  @@@@         @@@@@@
+                              @  @@@  @@@@@@@@ @@@@@@ @@@@@@@    @@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@ @ @@@@@@    @@@@@@@@@      @@@@@@                                                          @@@@@@   @@@    @@@@ @ @@@@@@@@@@ @        @@@@@@   @@ @@      @ @@@@@@@@@@@@@@  @@@@ @       @@@@@@
+                              @@ @@@   @@@@@@@@@@@@   @@@@@@@     @@@@@@ @@@@@@@@@@@@@@    @@@@@@@@@@@@@@@    @@@@@@@@@      @@@@@@                                                           @@@@@   @ @    @@@@ @@@@@@@@@@@ @@        @@@@@@   @@@@@      @@@@@@@ @ @@@@@@  @@@@         @@@  @
+                              @@@@@@      @@@@ @@@       @@@@             @@@ @@@@@      @@@@   @   @@@       @@@  @@@@      @@@@@                                                            @@@@@   @@@     @@@     @@@@@@@           @@@                      @@@@@@@@@    @@@@         @@@@@@
+                              @@@@@@@        @@       @@@@@   @@@@@@      @@@@@@@@@@@@@@@@   @    @@@@@@@@@@@@              @@ @@@                                                            @@@ @                                                                                        @@@@@@
+                              @@@@@@@      @@@@@      @ @@@@@ @@@@@@@@@   @@@@@ @@@@ @@@@ @@@@   @@@@@@@@  @@@              @@@@@@                                                            @@@@@@             @@@@@@@@@    @@@   @@@    @@@@@@@@@    @@@@@@@@     @@@@@@@@@             @@@@@
+                               @  @@@      @@@@       @@@@@ @ @@@@@@@ @   @@@@@@@@@@@@@@@        @@@@@@@@@@@@@              @@@@ @                                                            @@@@@@             @@    @@@    @ @   @ @@@  @@@    @@    @@ @@@@@     @@@    @@@            @ @@@
+                               @@@@@@      @@@@       @@@@@@@ @@@@@@@@ @@@@@@@@      @@@@      @@@@@@@     @@ @@@@@         @@@@@@                                                            @@@@@@             @@@@@@@@@@@@ @@@   @@@@@  @@@@@@@ @@@@  @@@@@@@@@@@  @@@@@@ @@@@          @ @@@
+                               @@@@@@     @@@@@      @@@@@@@@ @@@@@@  @@ @@@@@@      @@@@      @@@@@@@@      @@@@@@         @@@@@                                                              @@@@@           @@@@@   @@ @@@ @@@@  @@@@@@@@@@   @@@@@@@@@@   @@@@@@@@@@   @@@@@@         @@@@ @
+                                 @@@@     @@@@@      @@@@@@@@ @@@@@@  @@@@@@@@@      @@@@      @@@@@@@@@@@@@@@@@@@@         @@@@@                                                              @@@ @           @@ @@@  @@@@@@ @@@@@ @@@ @@@@@@   @@@@@@@@@@   @@ @@@@@@@   @@@@@@         @@@@@@
+                                @@@@@     @@@@@@@@@@@@@@@@@@@ @@@@@@     @@@@@@     @@@@@@@     @@@@@@@@@@@@@@ @@@@         @ @ @                                                              @@@@@           @@@@@@ @  @@@@ @@@@  @@@@@@@@@@   @@@@@@@@@@   @@@@@@@@@@   @@@@@@         @@@@@@
+                                @@@ @     @@ @  @      @@@   @@@  @@      @@@@@     @@   @@         @@@@@@@@@  @@           @@ @@                                                              @@@@@              @@@  @  @@@ @@@  @@@@@@@@@@@   @@@ @@@@@@   @@ @@@@@@@   @@ @@@         @@@ @
+                                @   @        @@@@@@@@@@@@@    @@@@@@    @ @@@@@@@@  @@@@@@@         @@@@@@@@@@@@            @@@@@                                                              @@@@                       @ @@@@@  @ @@ @ @@@@    @@ @@@@@@    @@@@@@@@@                    @@@
+                                @@@@@      @@@@@@@@@@@@@@@@@@@  @@@@   @@@   @@@@@@  @@@@   @@@@@       @@@@@               @@@@@                                                               @@@                       @@@@@@@  @@@@@@@@@@@     @@@@@@@@    @@@@ @@@@                    @ @
+                                @@@@@      @@ @@@  @@@ @  @@ @  @@@@   @ @@@@@ @@@@  @@@@   @ @@@@@@   @@@@@@                @@@                                                                @@@               @@@        @@@@   @@@  @@@@@   @@@  @@@@@        @@@@@                   @@@@
+                                 @@@       @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@ @@@@@@@   @ @@@@@@@@@@@@@ @@               @@@                                                                @ @              @@@@@@@@@@@ @@@@   @@@@ @@@@@@@@@@@@@ @@@@  @@@@  @@@@@                   @@@@
+                                 @@@              @@@@@     @@@@@@@@@@@@@@@@@  @@@@@@@@@@   @@@@@@@@@@@@@@@@@@@@             @ @                                                                @ @              @@@@@@@@@ @  @ @   @@@     @@@@@@@@ @  @ @     @    @ @                   @ @
+                                 @ @              @@@@@     @@@@@@@@@@@@@@@@@  @@@@@@@@@@   @ @@@@@@@@@@ @@@@@ @             @ @                                                                @@@              @@@@@@@@@@@  @@@   @@@@    @@@@@@@@@@  @@@  @@@@    @@@                   @ @
+                                 @@@@             @@@@@     @@@@  @@@@@@@ @@@@@@@ @@ @@@@   @ @@@@@@@@@@@@@ @  @@@          @@@@                                                                 @@@                                                                                       @@@
+                                 @@@@            @@@@@@@      @@@@@@    @@@ @@@@@ @@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@          @@@                                                                  @ @  @@@    @@@   @@@@   @@@   @@@@@@@@@@@@ @@@@@@@@@@         @@@   @@@@   @@@@@@@@@     @@@
+                                  @@@  @@@@@@    @@@@ @@      @@@@@@    @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@ @@@@@@@  @@@                                                                  @@@  @ @    @@@@  @@@@   @@@@  @@@@@@@@  @@ @@ @ @ @@@@        @ @   @@@@   @@  @ @@@@   @@@@
+                                  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ @@    @@@@@@@@@@@ @ @@@@@@@ @@@@ @@@@@@ @@@@@@@@@@@@@@@@@@@@                                                                  @@@  @@@    @@@@  @@@@   @@@@  @@@@@@@@@@@@  @@@@@@@@@@        @@@   @@@@   @@@@@@@@@@   @@@@
+                                  @ @@@@@  @@@@@@ @@@@@        @@ @@@@@@ @@@@@     @ @@@@@@@@@@ @@  @@@       @@@@@@@@  @@@@@ @                                                                  @ @ @@@     @@@@@@@@@@@  @@@@     @@@ @@   @@@@    @@@@        @@@   @@@@@@ @@    @@@@@@ @@@
+                                  @@@@ @@@@@@ @@ @@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@   @@@ @                                                                  @@@@@@@@    @@@@@@@@@@@  @@@@@@   @@@@@@   @@@@@   @@@@@@    @@@@@   @@@@@@ @@@@ @@@ @ @ @@@
+                                  @@@@@@@@@@@@ @@ @          @@@@@@@@@@@                 @@@@@@@ @@@          @ @@@@@@@@@@@@@@                                                                    @@@@@@@@   @@@@@@@@@@@  @@@@ @   @@ @@@   @@@@@   @@@@@@    @@ @@   @@ @@@ @@@@ @ @  @@ @@@
+                                  @@@@@@@@@@@@@@@@@        @@@@@@@@@                          @@@@@@@@        @ @@@@ @@@@@@@@@                                                                    @@@@@@@    @@@@@@@@@    @@@@@@   @@@@@@   @@@@@   @@@@@@    @@@@@   @@@@@@ @@@@ @@@@   @@@
+                                   @@@@@@@@@@@@@ @@      @@@@@@@                                @@@@@@@@      @@@ @@@@@@@@@@@@                                                                    @@@@@@@     @ @ @@@@@   @@@ @@   @@@@@    @@@@@    @@@@@    @@@@@   @@@@@@       @@@@@@@@@
+                                   @@@@@@@@@@@@@@@@@   @@@  @@@@                                 @@@@@@@@@    @@@@@@@@@@@@@@@@                                                                    @ @@@@@     @ @ @@@@@   @ @@ @    @ @@    @@@@@   @@@@ @    @@@@@   @@@  @  @@@  @ @@ @@ @
+                                   @@@ @@@@@@@@@@@@@ @@@@@@@@@                                      @@@@@@@@ @@@@ @@@  @@@@@@                                                                      @ @@@@    @@@@ @@@@@   @ @@@@   @@@@     @@@@@   @ @@@@    @@@@@   @@@@@@  @ @  @ @@@ @@@
+                                   @@@@@@@@@@@@@ @@@@@@  @@                                         @@@@@ @@@@@@   @@@@@@@@@@                                                                      @@@@@  @@@@@@@ @@@@    @ @      @ @      @@@ @@@@@@@       @@@@@@@@@ @  @  @@@@@@ @  @@@@
+                                    @@@@@@@@@@@@ @@@@@@@@@@                                          @@ @@@ @@@@   @@@@@@@@@@                                                                      @@@    @@@ @ @ @@@@    @ @      @ @      @@@@@@@@@ @           @@@@@ @ @@  @@@@ @ @  @ @
+                                    @@@  @@@@@   @@@@@ @@@                                            @@ @@@@@@@   @@ @@@ @@@                                                                      @@@@@@ @@@ @@@ @@@@    @@@      @@@       @@@@@@@@@@           @@@@@@@     @@@@ @@@@@@@@
+                                    @@@@@@@ @@   @@@@ @@@@                                             @@@@ @@@@   @@@@@@@@@@                                                                       @@@@@   @@@                              @@@@                               @@@   @@@@@
+                                    @@@  @@@@@@@@    @@@@    @@@@@@@                       @@@@@@@@@@@  @ @     @@@@@@@@ @@@                                                                        @ @@@  @@@@                              @@@@                               @@@  @@ @@@
+                                      @@ @@@@@ @@    @@@@  @@@@@@@@@@                      @@@@@@@@@@@  @@@@    @@ @@@@@ @@@                                                                        @@ @@  @@@@        @@@@                  @@@@                   @@@@        @ @  @@@@@@
+                                     @@@ @@@@@ @@    @ @   @@@@   @@@@                     @@       @@   @@@   @@@ @@@@@ @ @                                                                        @@@@@@ @@@         @@@@@@                @@@@@                @@@@@@        @ @  @@@ @
+                                     @@@  @@@@ @@    @ @   @@      @@@                     @@       @@   @ @   @@@ @@@@  @ @                                                                        @@@@@@ @@@         @@@@@@@             @@@@@@@@             @@@@ @@@        @@@@ @@@ @
+                                     @@@@ @@@@@@@    @ @   @@@@  @@@@@                     @@       @@   @@@   @@@@@@@@  @@@                                                                        @@@@@@ @@@          @@@@@@@@@@@@@@@@@ @@@@@ @@@@@@@@@@@@@@@@@@ @@@@         @@@@@@@@ @
+                                     @@ @@@@@@@@     @@@@ @@@@@@@@@@@                      @@@@@@@@@@@@ @@@@     @@@@@@@@@@                                                                          @ @@@ @@@           @@@@@@@@@   @@@@@@@@@@@@@@@@@@@@@  @@@@@@@@@            @@@@@@@@@
+                                      @@@ @@ @@@     @@@@@  @@@@@@@@                       @@@@@@@@@@@@@@ @      @@@@@   @@                                                                          @@@@@@@@@             @@@@@@@@@@@@ @@@ @@@@@@@@@@@ @@@@@@@@@@@              @@@@@@@@@
+                                      @@@@@@@@@@      @@@@@@                                   @@@   @@@@@@      @@@@@@@@ @                                                                          @@@@@@@@@              @@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@              @ @@@@@@@
+                                      @@@ @@@@@       @@@@@                                  @@@@@@@  @@@@@       @@@@ @@@@                                                                          @ @@@@@@@              @@ @@@@ @@@@@ @@@     @@ @@@@@@@@@@@@@               @ @@@@ @
+                                      @ @@@@@@@@@@    @@@@@                                  @@@ @@@ @@@@@@    @@@@@@@@@@@@                                                                          @@@ @@@@               @@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@ @@@@               @ @@@@ @
+                                      @@@@@@@@@ @@   @@@@@@                                  @@@@@@@ @@@@@@@   @@ @@@@@@@@@                                                                           @@@@@@@                @@@@@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@               @@@@@@@@
+                                      @@@@@@@@@@@@   @@@@@ @@@                                 @@@   @@@ @ @   @@@@@@@@@@@                                                                            @@@@@@@                @@@@@@@@@   @@@@@@@@@@@@@  @@@@@@@@@@               @@@@ @@@
+                                       @ @@@@@@@@@   @@ @@@@@@                                        @ @@@ @@ @@@@@@@@@@@                                                                            @ @@@@@              @@@@@@@ @@       @@@@@@@@@@   @@@@@@ @@@              @@@@@@@@
+                                       @@@@@@@@@@@ @@ @@@@@@@@@@@@                             @@@    @@@@@@ @@@@@@@@ @@@@                                                                            @ @@@@@            @@@@@@@@@@@@       @@@@@@@@@    @@@@@@@@@@@@@            @@@@ @
+                                       @ @@@@@@@@@@@ @@ @ @@@ @@@@@@                        @@@@ @ @   @@@  @ @@@@@@@@@  @                                                                            @@@ @@@          @@@@ @@@@@@@@@       @@@@@@@@     @@@@@@@@@ @@@@@          @@@@@@
+                                       @@@@ @@@@ @@@@@@@@   @@@@@@@@ @@@@               @@@@@ @@@@     @@@  @@@@ @@@@@@@@@                                                                             @@@     @@@@@@@@@@@@@ @@@@@@@@    @@@@@@@@@@@@    @@@@@@@@@@@@@@@@@@@@@@      @@@
+                                       @@@@ @@@@ @ @ @@@@     @@@@@@@@@@@ @@@@@@@@@ @@@ @@@@@@@@       @@@@ @@@@ @@@  @@@                                                                              @ @     @@      @@@@@@@  @@@@@    @@  @@@@@@@@    @@@@@   @@@@@@@     @@      @ @
+                                        @ @ @@@@ @ @ @ @        @@@ @ @@@ @@@@@@ @@ @ @ @@@@  @@       @@@@ @@@@ @@@@@@@@                                                                              @@@     @@@@@@@@@@@@@@@@@@@@@@    @@@@@@@@@@@@    @@@@@@@@@@@@@@@@@@@@@@     @@@
+                                        @@@      @ @ @@@         @@@@@@@  @@@@@@@@@ @@@  @  @           @@@ @@@@     @@@@                                                                                               @@@@@ @@@@@@@        @@@@        @@@@@@@@ @@@@              @@@
+                                        @@@      @ @ @@@            @@ @@@                @@            @@@ @@@@     @@@                                                                               @ @                @@@@@ @@@@@       @@@@@@@      @@@@@@@@@@@                @ @
+                                        @@@      @ @ @ @             @@@ @                              @@@ @@@@     @@@                                                                               @ @                   @@@@@@@@       @@@@@@@      @@@@@@@@@                  @ @
+                                        @ @   @@@@ @ @@@               @@@                              @@@ @@@@@@   @@@                                                                               @@@                     @@@@@@     @@@@@@@@@@@    @@@@@@@                    @@@
+                                        @ @ @@@ @@ @                                                        @@@@ @@@@@@@                                                                               @@@                     @@@@@@     @@ @@@@  @@    @@@@@@@                    @@@@
+                                        @@@@@ @@@@@@@   @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@   @ @@@@@ @@@@                                                                               @@@                   @@@@@@@@     @@@@@@@@@@@    @@@@@@@@@                   @@@
+                                        @@@ @@    @ @@ @@@                                             @@  @@ @   @@@@@@                                                                              @@@@                @@@@@ @@@@@        @@@@        @@@@@@@@@@@                 @@@
+                                        @@@@@      @ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ @ @@      @@@@@                                                                             @ @               @@@@@ @@@@@@@      @@@@@@@@@     @@@@@@@@ @@@@@              @ @
+                                        @@@@@@@@@@@@@@@  @                                            @ @@ @@@@@@@@@@@@@@                                                                             @@@      @@@@@@@@@@@@@@@@@@@@@@      @ @@@@@ @     @@@@@@@ @@@@@@@@@@@@@@      @@@@
+                                       @@@@@@@@@@@@@@@   @                                            @ @@ @ @@@@@@@@ @@@                                                                             @@@      @@      @@@ @@@  @@@@@      @@@@@@@@@     @@@@@   @@@ @@@     @@      @@@@
+                                       @@@@@@@@   @@@@   @                                            @ @@ @ @@   @@@ @@@@                                                                            @ @      @@@@@@@@@@@@@@@@@@@@@@        @@@@@       @@@@@@@@@@@@@@@@@@@@@@       @@@
+                                       @@  @@@@@@@@@@@   @                                            @ @@ @ @@@@@@@@  @ @                                                                           @@@@              @@@@@@@@@@@@@@        @@@@        @@@@@@@@@@@@@@@              @@@
+                                       @@@ @@@@@@@@@ @   @                                            @ @@ @ @@@@@@@@  @@@                                                                           @@@                 @@@@@@@@@@@@        @@@@@@      @@@@@@@@@@@@                 @ @
+                                       @ @ @   @@@   @   @                                            @ @@ @   @@@     @@@                                                                           @@@                  @@ @@@@@ @@        @@@@        @@@@@@@@@@@                  @ @
+                                       @   @@@@@@@@@ @   @                                            @ @@ @ @@@@@@@   @ @                                                                           @ @                  @@@@@@@@ @@@       @@@@       @@@@@@@@@@@@                  @@@@
+                                      @@@@ @@@@@@@@@@@   @                                            @ @@ @@@@@@@@@@  @@@@                                                                          @@@                  @@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@                 @@@@
+                                      @@@@ @@@@   @@@@   @                                            @ @@ @@@@   @@@   @@@                                                                          @@@                  @@@@@@@@@@@ @@@@   @@@@   @@@@@@@@@ @@@@@@@                  @ @
+                                      @@@@ @@@@@@@@@@@   @                                            @ @@ @@@@@@@@@@   @@@                                                                         @@@@                  @@@@@ @@@@@@@ @@@@@@@@@@@@@@  @@@@@@@@@@@@@                  @@@
+                                      @@@@ @@@@@@@@@ @   @                                            @ @@ @ @@@@@@@@   @ @                                                                         @@@                  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@  @@@                 @ @
+                                      @ @@ @         @   @                                            @ @@ @            @@@                                                                         @@@                @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@                @@@@
+                                     @@@@@ @@@@@@@@@ @   @                                            @ @@ @ @@@@@@@@   @@@                                                                         @@@              @@@@ @@@@@@@@@@@   @@@@ @@@@@@@@@   @@@@@@@@@@@@@@@@              @@@@
+                                     @@@@@ @@@@@@@@@@@   @                                            @ @@ @@@@@@@@@@   @@@@                                                                        @ @              @@@@@@@              @@@@@@@@@@@             @@@@ @@               @ @
+                                     @ @ @ @@@    @@@@   @                                            @ @@ @@@@   @@@    @@@                                                                        @@@              @@@@@                 @@@@@@@@                 @@@@@@              @@@
+                                     @@@ @ @@@@@@@@@@@   @                                            @ @@ @@@@@@@@@@    @@@                                                                       @@@               @@@@                    @@@@@                    @@@               @@@
+                                     @@@ @ @@@@@@@@@ @   @                                            @ @@ @ @@@@@@@@    @@@                                                                       @ @                                       @@@@                                       @ @
+                                    @@@  @ @  @@@@   @   @                                            @ @@ @   @@@@      @ @                                                                       @@@                                       @@@@                                       @@@@
+                                    @@@  @ @@@@@@@@@ @   @                                            @ @@ @ @@@@@@@@    @@@                                                                       @ @                   @@@ @@@             @@@@@@           @@@ @@@@                  @@@@
+                                    @@@  @ @@@@@@@@@@@   @                                            @ @@ @@@@@@@@@@     @@@                                                                     @ @                    @ @@@ @@@          @@@@@@@          @@ @@@@@@                @@@@ @
+                                    @@@  @ @@@@  @@@@@   @                                            @ @@ @@@@   @@@     @ @                                                                     @@@@@@@                @@@@@@@ @          @ @ @ @        @@@@@@@@@@@                @@@@@@
+                                   @@@@@@@ @@@@@@@@@@@   @                                            @ @@ @@@@@@@@@@     @@@                                                                     @@@@@@@                   @ @@@@@@@       @ @ @ @       @@ @@@@@@@ @                @@@@@@
+                                   @@@@@@@ @@@@@@@@@ @   @                                            @ @@@@@@@@@@@@   @@@@@@                                                                     @@    @                @  @@@ @ @ @@@     @ @ @ @     @@@@@ @@@@ @ @               @@@@@@@@
+                                   @@@@@@@ @  @@@@   @   @                                            @ @ @@@@@@@@@    @@@@@@                                                                    @@@@   @                @    @@@@@@@ @     @ @ @ @   @@@ @  @@@@  @ @               @@@@@@@@
+                                   @@@@@@  @@@@@@@@@ @   @                                            @ @  @@@@@@@@@@  @@@@@@@                                                                   @ @@   @                @ @    @@ @@@@@@@  @ @ @ @  @@ @@@@@@@    @ @               @@  @  @
+                                   @ @@@@  @@@@@@@@@@@   @                                            @ @   @@@@@@@@@  @@@@@@@                                                                   @@@@@  @                @ @     @@@ @ @ @@ @ @ @ @@@@@@ @ @@      @ @               @@  @@@@@
+                                  @@@@@@@  @@@@  @@@@@   @                                            @ @   @@@   @@@  @@@@@@@                                                                   @@@@@ @@@               @ @       @@@@@@@@@@ @ @ @@ @ @ @@@       @ @               @@  @@@@@
+                                  @@@ @@@  @@@@@@@@@@@   @                                            @ @   @@@@@@@@@  @@@@@@@                                                                   @ @@@ @@@               @ @         @@ @@@ @ @ @ @@@@@@@@         @ @               @@  @@@@@
+                                  @@@@@@@  @@@@@@@@@@ @@ @                                            @ @    @@@@@@@   @@@@@@ @                                                                 @@@@@@ @@@               @ @          @@@ @@@   @@@@@ @            @ @              @@@  @@@@@
+                                  @@@@@ @  @  @@@@@@ @@@ @                                            @ @     @@@@@    @@ @@                                                                    @@@@@@ @@@               @ @            @@@@@@  @@@ @@@            @ @              @@@   @  @
+                                  @ @@@ @  @@@@@@@@@@  @ @                                            @ @    @@@@@@@@  @@ @@@@@                                                                 @@ @@@ @@@@              @ @              @@ @  @@ @@              @ @              @@    @@@@
+                                  @ @@@ @  @@@@@@@@@@  @ @                                            @ @   @@@@ @@@@  @@ @@@ @                                                                 @ @@ @ @@@@              @ @               @@@@ @@@                @ @             @@@    @@@@@
+                                 @@@@@@ @  @@@@  @@@@  @ @                                            @ @   @@@@ @@@@  @@ @@ @@@                                                                @@@@ @ @ @@              @ @                @ @ @ @                @ @             @@@    @@@@@
+                                 @@@@@  @  @@@@@@@@@   @ @                                            @ @   @@@@@@@@@  @@ @@@@@@                                                                @@@@ @ @ @@              @ @                @ @ @ @                @ @             @@@     @  @
+                                 @@@@@  @  @ @@@@@@    @ @                                            @ @   @@@@@@@   @@  @@@@@                                                               @@@@  @ @ @@@                                @ @ @ @                @ @             @@      @@@@
+                                 @@ @@  @  @ @@@@@@    @ @                                            @ @   @@@@@    @@  @@@ @                                                               @@@@  @ @ @@@             @@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@             @@      @@@@
+                                 @ @@@  @  @@@@@@@@@   @ @                                            @ @   @@@@@@@@  @@  @@@@@                                                               @@@@  @ @  @@   @@@@@@@@@@@@                 @@@ @@@                @@@ @@@@@@@@@  @@@       @@@@
+                                @@@@@   @  @@@@@ @@@   @ @                                            @ @   @@@@ @@@@  @@  @@ @@                                                               @@@@  @ @  @@@@@@@@@ @@@  @@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@ @@  @@@ @   @@@       @@@@
+                                @@@@@   @  @@@@  @@@   @ @                                            @ @   @@@@ @@@@  @@   @@@@@                                                              @@@   @ @  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@ @@        @@@@
+                                @ @@@   @  @@@@@@@@@   @@@                                            @@@    @@@@@@@@  @@   @@@@@                                                              @@@   @ @  @@@ @@@@ @@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ @@        @@@@
+                                @@@@@   @@@@ @@@@@@     @                                             @@@    @@@@@@@@@@@@   @@@@@                                                             @@@@   @ @  @@@@@@@@@@@@@@@@@@@@@@ @@@@@ @@@@@ @@@@ @@@@@@@ @  @ @@@@@@@@@@@@@@@@@@ @@         @@@
+                                @@@@    @@@@@                                                                       @@@@@   @@@@@                                                             @@@@   @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@     @@@
+                                 @@@    @@@ @@@                                                                   @@@@@@@   @@@ @                                                             @@@@   @@@ @@@@@@@@@@@@@@@@@@@@@@@ @@        @@@@ @@@@       @@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@   @@@@
+                               @@@@@    @@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@    @@@@                                                             @@@  @@@@@@@@@@@@@@@@@@@@@ @@@@    @@@@@@@@@@@@@@@@@@@@@@@@@@@@    @@@@  @@@@@@@@@@@@@@@@@@@@@ @@@@
+                               @@@@   @@@@@@@@@@@@@@        @@@                                   @@@        @@@@@@@@@@@@@@  @@@@@                                                            @@@@@@@@@@@         @@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@  @@@@@@        @@@@@ @@  @@
+                               @@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@  @@ @                                                           @@@@@@@@@              @@@@@@@@@@@@@@@@@@@@@@@@@@  @@@@@@@@@@@@@@@@@@@@@ @@@@              @@@@@@@@@
+                              @@@@@@@@@@@@@       @@@@@@@@@@@@@ @                               @ @ @@@@@@@@@@@      @@@@@@@@@@@@@                                                           @@@@@@@@                 @@@@@@@@                                   @@@@@@@                  @@@@@@@
+                              @ @@@@@@@@             @@@@ @@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@  @  @@@@             @@@@@@@@@                                                           @@@ @@@                   @@@@@ @                                   @ @@@@                    @@@@ @@
+                              @@@@@@@@                 @@@@@@@@@                                 @@  @ @@                  @@@@@@@                                                          @@@@@@@                     @@@@ @                                   @ @@@@                     @@ @@@
+                              @@@ @@@                    @@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@                    @@@@@@@                                                         @ @ @@                      @@@@ @                                   @ @@@                      @@ @@@
+                              @ @@@@                     @@@@ @                                   @ @@@@                    @@@ @@@                                                         @@@ @@@                     @@ @ @                                   @ @@@@                    @@@ @@@
+                             @@@@@@@                     @@ @ @                                   @ @@@@                     @@ @@@                                                         @@@@@@@@                   @@@ @ @                                   @ @@@@@                   @@@@@@@@
+                             @@@@@@@                     @@ @ @                                   @ @@@@                     @@ @@@                                                         @ @@@@@@@                 @@@@@@ @                                   @ @@@@@@                @@@ @@@@ @
+                             @@@@@@@@                   @@@@@ @                                   @ @@@@@                   @@@@ @ @                                                        @@@@@@@@@@@             @@@@@@@@ @                                   @ @@@@@@@@            @@@@@@@@@@@@
+                             @@@@@@@@@                 @@@@@@ @                                   @ @@@@@@                 @@@@@  @                                                        @@@@@ @@@@@@@@@       @@@@@@@@@@@@@                                   @@@@ @@ @@@@@      @@@@@@@@@ @@@@@
+                             @ @@@@@@@@               @@@@@@@ @                                   @ @@@@@@               @@@@@@@ @@@                                                       @ @@@  @@@@@@@@@@@@@@@@@@@@ @@@@@@@                                   @@@@@ @@@@@@@@@@@@@@@@@@@@@  @@@ @
+                             @@@@@ @@@@@@@         @@@@@@@@@@ @                                   @ @@ @@@@@@@         @@@@ @@@@ @ @                                                       @ @@@     @@@@ @@@@@@@ @@@@@@@@@@@                                     @@@@@@@@@@@@@@@@@@@@@@@     @@@ @
+                            @@@@@@  @@@@@@@@@@@@@@@@@@@@@@@@@@@                                   @@@@@@@@@@@@@@@@@@@@@@@@@@@ @@ @@@                                                       @ @@@@@@@     @@@@@@@@@@@@@@@@@                                          @@@@@@@ @@@@@@@@@     @@@@@@@@@
+                            @@@@@@    @@@@@@@@@@@@@@@@@@@@@@@@@                                   @@@@@@@@@ @@@@@@@@@@@@@@@   @@  @@@                                                      @@@@@@@@@@@@@  @@@@@@ @@@@@@                                                @@@@@@@@@@@@@  @@@@@@@@@@@@@
+                            @@@@@@@@@      @@@@@@@@@@@@@@@@@                                         @@@@@@@@@@@@@@@@@     @@@@@@@@ @                                                          @@@@@@@@@@@@@@ @@@@@@                                                      @@@@@@ @@@@@@@@@@@@@@@
+                            @@@@@@@@@@@@@@   @@@@@ @@@@@@                                              @@@@@@@ @@@@@   @@@@@@@@@@@@@@                                                              @@@@@@@@@@@@@@                                                            @@@@@@@@@@@@@@@
+                               @@@ @@@@@@@@@@@@@@ @@@@                                                     @@@@  @@@@@@@@@@@@@@@@@                                                                      @@@@@@                                                                  @@@@@@@
+                                   @@@ @@@@@@@@@@@@                                                           @@@@@@@@@@@@@@@@
+                                       @@@@  @@@                                                                @@@@ @@@@@
+                                                                                                                    @
+
+
+
+
+
+
 )";
 }
 
@@ -837,11 +865,11 @@ const char* getConfigHTML() {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         * { box-sizing: border-box; }
-        body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            margin: 0; 
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
             padding: 20px;
-            background: #0f0f23; 
+            background: #0f0f23;
             color: #ffffff;
             position: relative;
             overflow-x: hidden;
@@ -862,13 +890,13 @@ const char* getConfigHTML() {
             pointer-events: none;
             overflow: hidden;
         }
-        .container { 
-            max-width: 700px; 
-            margin: 0 auto; 
-            background: rgba(255, 255, 255, 0.02); 
-            padding: 40px; 
-            border-radius: 16px; 
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2); 
+        .container {
+            max-width: 700px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.02);
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
             backdrop-filter: blur(5px);
             border: 1px solid rgba(255, 255, 255, 0.05);
             position: relative;
@@ -905,27 +933,27 @@ const char* getConfigHTML() {
                 margin: 10px;
             }
         }
-        .section { 
-            margin-bottom: 30px; 
-            padding: 25px; 
-            border: 1px solid rgba(255, 255, 255, 0.1); 
-            border-radius: 12px; 
-            background: rgba(255, 255, 255, 0.01); 
+        .section {
+            margin-bottom: 30px;
+            padding: 25px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.01);
             backdrop-filter: blur(3px);
         }
-        .section h3 { 
-            margin-top: 0; 
-            color: #ffffff; 
+        .section h3 {
+            margin-top: 0;
+            color: #ffffff;
             font-size: 18px;
             font-weight: 600;
             margin-bottom: 15px;
         }
-        textarea { 
-            width: 100%; 
+        textarea {
+            width: 100%;
             min-height: 120px;
-            padding: 15px; 
-            border: 1px solid rgba(255, 255, 255, 0.2); 
-            border-radius: 8px; 
+            padding: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
             background: rgba(255, 255, 255, 0.02);
             color: #ffffff;
             font-family: 'Courier New', monospace;
@@ -937,10 +965,10 @@ const char* getConfigHTML() {
             border-color: #4ecdc4;
             box-shadow: 0 0 0 3px rgba(78, 205, 196, 0.2);
         }
-        .help-text { 
-            font-size: 13px; 
-            color: #a0a0a0; 
-            margin-top: 8px; 
+        .help-text {
+            font-size: 13px;
+            color: #a0a0a0;
+            margin-top: 8px;
             line-height: 1.4;
         }
         .toggle-container {
@@ -969,19 +997,19 @@ const char* getConfigHTML() {
             cursor: pointer;
             user-select: none;
         }
-        button { 
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-            color: #ffffff; 
-            padding: 14px 28px; 
-            border: none; 
-            border-radius: 8px; 
-            cursor: pointer; 
-            font-size: 16px; 
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #ffffff;
+            padding: 14px 28px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
             font-weight: 500;
-            margin: 10px 5px; 
+            margin: 10px 5px;
             transition: all 0.3s;
         }
-        button:hover { 
+        button:hover {
             transform: translateY(-2px);
             box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
         }
@@ -991,10 +1019,10 @@ const char* getConfigHTML() {
             padding-top: 30px;
             border-top: 1px solid #404040;
         }
-        .status { 
-            padding: 15px; 
-            border-radius: 8px; 
-            margin-bottom: 30px; 
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 30px;
             margin-top: 10px;
             border-left: 4px solid #ff1493;
             background: rgba(255, 20, 147, 0.05);
@@ -1007,7 +1035,7 @@ const char* getConfigHTML() {
     <div class="ascii-background">%ASCII_ART%</div>
     <div class="container">
         <h1>OUI-SPY Detector</h1>
-        
+
         <div class="status">
             Enter MAC addresses and/or OUI prefixes below. You must provide at least one entry in either field.
         </div>
@@ -1024,7 +1052,7 @@ DD:EE:FF
                     Format: XX:XX:XX (8 characters with colons)
                 </div>
             </div>
-            
+
             <div class="section">
                 <h3>MAC Addresses</h3>
                 <textarea id="macs" name="macs" placeholder="Enter full MAC addresses, one per line:
@@ -1036,7 +1064,7 @@ DD:EE:FF:ab:cd:ef
                     Format: XX:XX:XX:XX:XX:XX (17 characters with colons)
                 </div>
             </div>
-            
+
             <div class="section">
                 <h3>Audio & Visual Settings</h3>
                 <div class="toggle-container">
@@ -1052,7 +1080,7 @@ DD:EE:FF:ab:cd:ef
                     </div>
                 </div>
             </div>
-            
+
             <div class="section">
                 <h3>WiFi Access Point Settings</h3>
                 <div class="help-text" style="margin-bottom: 15px;">
@@ -1070,7 +1098,7 @@ DD:EE:FF:ab:cd:ef
                     <div class="help-text" style="margin-top: 5px;">8-63 characters (leave empty for open network)</div>
                 </div>
             </div>
-            
+
             <!-- Detected Devices Section -->
             <div class="section" id="detectedDevicesSection">
                 <h3>Device Alias Management</h3>
@@ -1094,13 +1122,13 @@ DD:EE:FF:ab:cd:ef
                 <button type="button" onclick="clearConfig()" style="background: #8b0000; margin-left: 20px;">Clear All Filters</button>
                 <button type="button" onclick="deviceReset()" style="background: #4a0000; margin-left: 20px; font-size: 12px;">Device Reset</button>
             </div>
-            
+
             <!-- Burn In Configuration Section -->
             <div class="section" style="border: 2px solid #8b0000; background: linear-gradient(135deg, rgba(139, 0, 0, 0.03) 0%, rgba(139, 0, 0, 0.08) 100%); margin-top: 40px;">
                 <h3 style="color: #ff6b6b; margin-top: 0; font-size: 18px; letter-spacing: 1px; text-transform: uppercase; border-bottom: 2px solid rgba(255, 107, 107, 0.3); padding-bottom: 12px; margin-bottom: 20px; text-align: center;">
                     Burn In Settings
                 </h3>
-                
+
                 <div style="background: linear-gradient(135deg, #1a0a0a 0%, #2d0a0a 100%); color: #ff9999; padding: 18px; border-radius: 8px; margin: 15px 0; border: 2px solid #8b0000; box-shadow: 0 4px 15px rgba(139, 0, 0, 0.3);">
                     <p style="font-weight: 600; font-size: 13px; margin: 0 0 10px 0; color: #ff6b6b; text-transform: uppercase; letter-spacing: 0.5px;">
                         Warning - Requires Flash Erase to Unlock
@@ -1120,7 +1148,7 @@ DD:EE:FF:ab:cd:ef
                         <strong>Unlock:</strong> USB connection, flash erase, then firmware reflash required
                     </p>
                 </div>
-                
+
                 <div style="background: linear-gradient(135deg, #0a1a0a 0%, #0a2d0a 100%); color: #99ff99; padding: 18px; border-radius: 8px; margin: 15px 0; border: 1px solid #166534; box-shadow: 0 2px 10px rgba(22, 101, 52, 0.2);">
                     <p style="font-weight: 600; margin: 0 0 8px 0; color: #4ade80; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">
                         Use Cases:
@@ -1132,7 +1160,7 @@ DD:EE:FF:ab:cd:ef
                         <li>Battery-powered optimization</li>
                     </ul>
                 </div>
-                
+
                 <div style="text-align: center; margin-top: 25px; padding-top: 20px; border-top: 1px solid rgba(255, 107, 107, 0.2);">
                     <button type="button" onclick="burnInConfig()" style="background: linear-gradient(135deg, #8b0000 0%, #6b0000 100%); color: #ffffff; font-size: 15px; padding: 15px 35px; font-weight: 600; border: 2px solid #ff0000; border-radius: 8px; cursor: pointer; text-transform: uppercase; letter-spacing: 1px; box-shadow: 0 4px 15px rgba(139, 0, 0, 0.4); transition: all 0.3s;">
                         Lock Configuration Permanently
@@ -1142,7 +1170,7 @@ DD:EE:FF:ab:cd:ef
                     </p>
                 </div>
             </div>
-            
+
             <style>
                 .device-list {
                     display: flex;
@@ -1217,12 +1245,12 @@ DD:EE:FF:ab:cd:ef
                     font-style: italic;
                 }
             </style>
-            
+
             <script>
             // Load detected devices on page load
             window.addEventListener('DOMContentLoaded', function() {
                 loadDetectedDevices();
-                
+
                 // Ensure form submits on first click (mobile fix)
                 const configForm = document.getElementById('configForm');
                 if (configForm) {
@@ -1234,7 +1262,7 @@ DD:EE:FF:ab:cd:ef
                                 document.activeElement.blur();
                             }
                         }, { passive: true });
-                        
+
                         submitBtn.addEventListener('click', function(e) {
                             // Ensure any focused element is blurred before submit
                             if (document.activeElement && document.activeElement !== submitBtn) {
@@ -1244,46 +1272,46 @@ DD:EE:FF:ab:cd:ef
                     }
                 }
             });
-            
+
             function formatTimeSince(milliseconds) {
                 const seconds = Math.floor(milliseconds / 1000);
                 const minutes = Math.floor(seconds / 60);
                 const hours = Math.floor(minutes / 60);
                 const days = Math.floor(hours / 24);
-                
+
                 if (seconds < 60) return 'Just now';
                 if (minutes < 60) return minutes + ' min ago';
                 if (hours < 24) return hours + ' hour' + (hours > 1 ? 's' : '') + ' ago';
                 return days + ' day' + (days > 1 ? 's' : '') + ' ago';
             }
-            
+
             function loadDetectedDevices() {
                 fetch('/api/devices')
                     .then(response => response.json())
                     .then(data => {
                         const deviceList = document.getElementById('deviceList');
                         const clearBtn = document.getElementById('clearDeviceBtn');
-                        
+
                         if (data.devices && data.devices.length > 0) {
                             clearBtn.style.display = 'block';
                             deviceList.innerHTML = '';
-                            
+
                             data.devices.forEach(device => {
                                 const deviceItem = document.createElement('div');
                                 deviceItem.className = 'device-item';
-                                
+
                                 // First row: device info
                                 const infoRow = document.createElement('div');
                                 infoRow.className = 'device-info-row';
-                                
+
                                 const macSpan = document.createElement('span');
                                 macSpan.className = 'device-mac';
                                 macSpan.textContent = device.mac;
-                                
+
                                 const rssiSpan = document.createElement('span');
                                 rssiSpan.className = 'device-rssi';
                                 rssiSpan.textContent = device.rssi + ' dBm';
-                                
+
                                 const timeSpan = document.createElement('span');
                                 timeSpan.className = 'device-time';
                                 const timeSince = device.timeSince || 0;
@@ -1291,11 +1319,11 @@ DD:EE:FF:ab:cd:ef
                                 if (timeSince < 60000) { // Less than 1 minute
                                     timeSpan.classList.add('recent');
                                 }
-                                
+
                                 infoRow.appendChild(macSpan);
                                 infoRow.appendChild(rssiSpan);
                                 infoRow.appendChild(timeSpan);
-                                
+
                                 if (device.filter) {
                                     const filterSpan = document.createElement('span');
                                     filterSpan.className = 'device-filter';
@@ -1303,18 +1331,18 @@ DD:EE:FF:ab:cd:ef
                                     filterSpan.title = device.filter;
                                     infoRow.appendChild(filterSpan);
                                 }
-                                
+
                                 // Second row: alias input and button
                                 const aliasRow = document.createElement('div');
                                 aliasRow.className = 'device-alias-row';
-                                
+
                                 const aliasInput = document.createElement('input');
                                 aliasInput.type = 'text';
                                 aliasInput.className = 'alias-input';
                                 aliasInput.placeholder = 'Device identification label';
                                 aliasInput.value = device.alias || '';
                                 aliasInput.maxLength = 32;
-                                
+
                                 const saveBtn = document.createElement('button');
                                 saveBtn.type = 'button';
                                 saveBtn.className = 'save-alias-btn';
@@ -1322,13 +1350,13 @@ DD:EE:FF:ab:cd:ef
                                 saveBtn.onclick = function() {
                                     saveAlias(device.mac, aliasInput.value, saveBtn);
                                 };
-                                
+
                                 aliasRow.appendChild(aliasInput);
                                 aliasRow.appendChild(saveBtn);
-                                
+
                                 deviceItem.appendChild(infoRow);
                                 deviceItem.appendChild(aliasRow);
-                                
+
                                 deviceList.appendChild(deviceItem);
                             });
                         }
@@ -1337,14 +1365,14 @@ DD:EE:FF:ab:cd:ef
                         console.error('Error loading devices:', error);
                     });
             }
-            
+
             function saveAlias(mac, alias, button) {
                 const originalText = button.textContent;
                 const originalBg = button.style.background;
                 button.textContent = 'Saving...';
                 button.disabled = true;
                 button.style.opacity = '0.6';
-                
+
                 fetch('/api/alias', {
                     method: 'POST',
                     headers: {
@@ -1375,7 +1403,7 @@ DD:EE:FF:ab:cd:ef
                     }, 2000);
                 });
             }
-            
+
             function clearDeviceHistory() {
                 if (confirm('CLEAR DEVICE HISTORY\n\nThis will remove all detected device records from non-volatile storage.\n\nAliases and filter configurations will be preserved.\n\nProceed with clearing device history?')) {
                     fetch('/api/clear-devices', { method: 'POST' })
@@ -1390,7 +1418,7 @@ DD:EE:FF:ab:cd:ef
                         });
                 }
             }
-            
+
             function clearConfig() {
                 if (confirm('Are you sure you want to clear all filters? This action cannot be undone.')) {
                     document.getElementById('ouis').value = '';
@@ -1407,7 +1435,7 @@ DD:EE:FF:ab:cd:ef
                         });
                 }
             }
-            
+
             function deviceReset() {
                 if (confirm('DEVICE RESET: This will completely wipe all saved data and restart the device. Are you absolutely sure?')) {
                     if (confirm('This action cannot be undone. The device will restart and behave like first boot. Continue?')) {
@@ -1426,12 +1454,12 @@ DD:EE:FF:ab:cd:ef
                     }
                 }
             }
-            
+
             function burnInConfig() {
                 if (!confirm('PERMANENT CONFIGURATION LOCK\n\nThis will PERMANENTLY lock all settings (OUI/MAC filters, aliases, buzzer/LED preferences).\n\nAfter activation:\n- WiFi AP and config window disabled on boot\n- Device boots directly to scanning mode\n- Unlock requires: flash erase + firmware reflash via USB\n\nClick OK to proceed with permanent lock.')) {
                     return;
                 }
-                
+
                 // Collect current form values
                 const formData = new URLSearchParams();
                 const ouisElement = document.getElementById('ouis');
@@ -1442,20 +1470,20 @@ DD:EE:FF:ab:cd:ef
                 const ledEnabled = document.getElementById('ledEnabled') ? document.getElementById('ledEnabled').checked : true;
                 const apSSID = document.getElementById('ap_ssid') ? document.getElementById('ap_ssid').value : '';
                 const apPassword = document.getElementById('ap_password') ? document.getElementById('ap_password').value : '';
-                
+
                 // Debug logging
                 console.log('Burn-in: OUI values:', ouis);
                 console.log('Burn-in: MAC values:', macs);
-                
+
                 formData.append('ouis', ouis);
                 formData.append('macs', macs);
                 if (buzzerEnabled) formData.append('buzzerEnabled', 'on');
                 if (ledEnabled) formData.append('ledEnabled', 'on');
                 formData.append('ap_ssid', apSSID);
                 formData.append('ap_password', apPassword);
-                
+
                 // User confirmed, proceed with burn-in - send current form values
-                fetch('/api/lock-config', { 
+                fetch('/api/lock-config', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/x-www-form-urlencoded',
@@ -1485,9 +1513,11 @@ DD:EE:FF:ab:cd:ef
 String generateRandomOUI() {
     String oui = "";
     for (int i = 0; i < 3; i++) {
-        if (i > 0) oui += ":";
+        if (i > 0)
+            oui += ":";
         int val = random(0, 256);
-        if (val < 16) oui += "0";
+        if (val < 16)
+            oui += "0";
         oui += String(val, HEX);
     }
     oui.toLowerCase();
@@ -1497,9 +1527,11 @@ String generateRandomOUI() {
 String generateRandomMAC() {
     String mac = "";
     for (int i = 0; i < 6; i++) {
-        if (i > 0) mac += ":";
+        if (i > 0)
+            mac += ":";
         int val = random(0, 256);
-        if (val < 16) mac += "0";
+        if (val < 16)
+            mac += "0";
         mac += String(val, HEX);
     }
     mac.toLowerCase();
@@ -1510,40 +1542,44 @@ String generateConfigHTML() {
     String html = getConfigHTML();
     String ouiValues = "";
     String macValues = "";
-    
+
     // Populate existing saved values (if any)
     for (const TargetFilter& filter : targetFilters) {
         if (filter.isFullMAC) {
-            if (macValues.length() > 0) macValues += "\n";
+            if (macValues.length() > 0)
+                macValues += "\n";
             macValues += filter.identifier;
         } else {
-            if (ouiValues.length() > 0) ouiValues += "\n";
+            if (ouiValues.length() > 0)
+                ouiValues += "\n";
             ouiValues += filter.identifier;
         }
     }
-    
+
     // Generate random examples for placeholders
-    String randomOUIExamples = generateRandomOUI() + "\n" + generateRandomOUI() + "\n" + generateRandomOUI();
-    String randomMACExamples = generateRandomMAC() + "\n" + generateRandomMAC() + "\n" + generateRandomMAC();
-    
+    String randomOUIExamples =
+        generateRandomOUI() + "\n" + generateRandomOUI() + "\n" + generateRandomOUI();
+    String randomMACExamples =
+        generateRandomMAC() + "\n" + generateRandomMAC() + "\n" + generateRandomMAC();
+
     // Replace static placeholders with random examples
     html.replace("AA:BB:CC\nDD:EE:FF\n11:22:33", randomOUIExamples);
     html.replace("AA:BB:CC:12:34:56\nDD:EE:FF:ab:cd:ef\n11:22:33:44:55:66", randomMACExamples);
-    
+
     // Remove ASCII art - causes memory exhaustion on ESP32
     html.replace("%ASCII_ART%", "");
-    
+
     html.replace("%OUI_VALUES%", ouiValues);
     html.replace("%MAC_VALUES%", macValues);
-    
+
     // Replace toggle states
     html.replace("%BUZZER_CHECKED%", buzzerEnabled ? "checked" : "");
     html.replace("%LED_CHECKED%", ledEnabled ? "checked" : "");
-    
+
     // Replace WiFi credentials
     html.replace("%AP_SSID%", AP_SSID);
     html.replace("%AP_PASSWORD%", AP_PASSWORD);
-    
+
     return html;
 }
 
@@ -1553,67 +1589,67 @@ String generateConfigHTML() {
 void startConfigMode() {
     currentMode = CONFIG_MODE;
     // configStartTime will be set AFTER AP is fully ready
-    
+
     Serial.println("\n=== STARTING CONFIG MODE ===");
     Serial.println("SSID: " + AP_SSID);
     Serial.println("Password: " + AP_PASSWORD);
     Serial.println("Initializing WiFi AP...");
-    
+
     // Ensure WiFi is off first
     WiFi.mode(WIFI_OFF);
     delay(1000);
-    
+
     // Start WiFi AP
     Serial.println("Setting WiFi mode to AP...");
     WiFi.mode(WIFI_AP);
     delay(500);
-    
+
     Serial.println("Creating access point...");
     bool apStarted = WiFi.softAP(AP_SSID.c_str(), AP_PASSWORD.c_str());
-    
+
     if (apStarted) {
         Serial.println("✓ Access Point created successfully!");
     } else {
         Serial.println("✗ Failed to create Access Point!");
         return;
     }
-    
+
     delay(2000); // Give AP time to fully initialize
-    
+
     IPAddress IP = WiFi.softAPIP();
     Serial.println("AP IP address: " + IP.toString());
     Serial.println("Config portal: http://" + IP.toString());
     Serial.println("==============================\n");
-    
+
     // NOW start the countdown - AP is fully ready and visible
     configStartTime = millis();
     lastConfigActivity = millis();
-    
+
     // Setup web server routes
-    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest* request) {
         lastConfigActivity = millis();
         request->send(200, "text/html", generateConfigHTML());
     });
-    
-    server.on("/save", HTTP_POST, [](AsyncWebServerRequest *request) {
+
+    server.on("/save", HTTP_POST, [](AsyncWebServerRequest* request) {
         lastConfigActivity = millis();
-        
+
         if (isSerialConnected()) {
             Serial.println("\n=== WEB CONFIG SUBMISSION ===");
         }
-        
+
         targetFilters.clear();
-        
+
         // Process OUI entries
         if (request->hasParam("ouis", true)) {
             String ouiData = request->getParam("ouis", true)->value();
             ouiData.trim();
-            
+
             if (ouiData.length() > 0) {
                 // Split by newlines and process each OUI
                 int start = 0;
                 int end = ouiData.indexOf('\n');
-                
+
                 while (start < ouiData.length()) {
                     String oui;
                     if (end == -1) {
@@ -1624,10 +1660,10 @@ void startConfigMode() {
                         start = end + 1;
                         end = ouiData.indexOf('\n', start);
                     }
-                    
+
                     oui.trim();
                     oui.replace("\r", ""); // Remove carriage returns
-                    
+
                     if (oui.length() > 0 && isValidMAC(oui)) {
                         TargetFilter filter;
                         filter.identifier = oui;
@@ -1638,17 +1674,17 @@ void startConfigMode() {
                 }
             }
         }
-        
+
         // Process MAC address entries
         if (request->hasParam("macs", true)) {
             String macData = request->getParam("macs", true)->value();
             macData.trim();
-            
+
             if (macData.length() > 0) {
                 // Split by newlines and process each MAC
                 int start = 0;
                 int end = macData.indexOf('\n');
-                
+
                 while (start < macData.length()) {
                     String mac;
                     if (end == -1) {
@@ -1659,10 +1695,10 @@ void startConfigMode() {
                         start = end + 1;
                         end = macData.indexOf('\n', start);
                     }
-                    
+
                     mac.trim();
                     mac.replace("\r", ""); // Remove carriage returns
-                    
+
                     if (mac.length() > 0 && isValidMAC(mac)) {
                         TargetFilter filter;
                         filter.identifier = mac;
@@ -1673,11 +1709,11 @@ void startConfigMode() {
                 }
             }
         }
-        
+
         // Process buzzer and LED toggles
         buzzerEnabled = request->hasParam("buzzerEnabled", true);
         ledEnabled = request->hasParam("ledEnabled", true);
-        
+
         // Process WiFi credentials
         if (request->hasParam("ap_ssid", true)) {
             String newSSID = request->getParam("ap_ssid", true)->value();
@@ -1686,29 +1722,31 @@ void startConfigMode() {
                 AP_SSID = newSSID;
             }
         }
-        
+
         if (request->hasParam("ap_password", true)) {
             String newPassword = request->getParam("ap_password", true)->value();
             newPassword.trim();
             // Allow empty password for open network, or 8-63 chars
-            if (newPassword.length() == 0 || (newPassword.length() >= 8 && newPassword.length() <= 63)) {
+            if (newPassword.length() == 0 ||
+                (newPassword.length() >= 8 && newPassword.length() <= 63)) {
                 AP_PASSWORD = newPassword;
             }
         }
-        
+
         // Save WiFi credentials
         saveWiFiCredentials();
-        
+
         if (isSerialConnected()) {
             Serial.println("Buzzer enabled: " + String(buzzerEnabled ? "Yes" : "No"));
             Serial.println("LED enabled: " + String(ledEnabled ? "Yes" : "No"));
             Serial.println("WiFi SSID: " + AP_SSID);
-            Serial.println("WiFi Password: " + String(AP_PASSWORD.length() > 0 ? "********" : "(Open Network)"));
+            Serial.println("WiFi Password: " +
+                           String(AP_PASSWORD.length() > 0 ? "********" : "(Open Network)"));
         }
-        
+
         if (targetFilters.size() > 0) {
             saveConfiguration();
-            
+
             if (isSerialConnected()) {
                 Serial.println("Saved " + String(targetFilters.size()) + " filters:");
                 for (const TargetFilter& filter : targetFilters) {
@@ -1716,7 +1754,7 @@ void startConfigMode() {
                     Serial.println("  - " + filter.identifier + " (" + type + ")");
                 }
             }
-            
+
             String responseHTML = R"html(
 <!DOCTYPE html>
 <html>
@@ -1724,37 +1762,37 @@ void startConfigMode() {
     <title>Configuration Saved</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            margin: 0; 
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
             padding: 20px;
-            background: #1a1a1a; 
+            background: #1a1a1a;
             color: #e0e0e0;
-            text-align: center; 
+            text-align: center;
         }
-        .container { 
-            max-width: 600px; 
-            margin: 0 auto; 
-            background: #2d2d2d; 
-            padding: 40px; 
-            border-radius: 12px; 
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3); 
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: #2d2d2d;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
         }
-        h1 { 
-            color: #ffffff; 
-            margin-bottom: 30px; 
+        h1 {
+            color: #ffffff;
+            margin-bottom: 30px;
             font-weight: 300;
         }
-        .success { 
-            background: #1a4a3a; 
-            color: #4ade80; 
-            border: 1px solid #166534; 
-            padding: 20px; 
-            border-radius: 8px; 
-            margin: 30px 0; 
+        .success {
+            background: #1a4a3a;
+            color: #4ade80;
+            border: 1px solid #166534;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 30px 0;
         }
-        p { 
-            line-height: 1.6; 
+        p {
+            line-height: 1.6;
             margin: 15px 0;
         }
     </style>
@@ -1768,7 +1806,9 @@ void startConfigMode() {
     <div class="container">
         <h1>Configuration Saved</h1>
         <div class="success">
-            <p><strong>Saved )html" + String(targetFilters.size()) + R"html( filters successfully!</strong></p>
+            <p><strong>Saved )html" +
+                                  String(targetFilters.size()) +
+                                  R"html( filters successfully!</strong></p>
             <p id="countdown">Switching to scanning mode in 5 seconds...</p>
         </div>
         <p>The device will now start scanning for your configured devices.</p>
@@ -1777,12 +1817,12 @@ void startConfigMode() {
 </body>
 </html>
 )html";
-            
+
             request->send(200, "text/html", responseHTML);
-            
+
             // Schedule mode switch for 5 seconds from now
             modeSwitchScheduled = millis() + 5000;
-            
+
             if (isSerialConnected()) {
                 Serial.println("Mode switch scheduled for 5 seconds from now");
                 Serial.println("==============================\n");
@@ -1791,61 +1831,64 @@ void startConfigMode() {
             request->send(400, "text/html", "<h1>Error: No valid filters provided</h1>");
         }
     });
-    
-    server.on("/clear", HTTP_POST, [](AsyncWebServerRequest *request) {
+
+    server.on("/clear", HTTP_POST, [](AsyncWebServerRequest* request) {
         lastConfigActivity = millis();
-        
+
         // Clear all filters
         targetFilters.clear();
         saveConfiguration();
-        
+
         if (isSerialConnected()) {
             Serial.println("All filters cleared via web interface");
         }
-        
+
         request->send(200, "text/plain", "Filters cleared successfully");
     });
-    
+
     // Device reset - completely wipe saved config and restart
-    server.on("/device-reset", HTTP_POST, [](AsyncWebServerRequest *request) {
+    server.on("/device-reset", HTTP_POST, [](AsyncWebServerRequest* request) {
         lastConfigActivity = millis();
-        
+
         if (isSerialConnected()) {
             Serial.println("DEVICE RESET - Request received, scheduling reset...");
         }
-        
-        request->send(200, "text/html", 
-            "<html><body style='background:#1a1a1a;color:#e0e0e0;font-family:Arial;text-align:center;padding:50px;'>"
-            "<h1>Device Reset Complete</h1>"
-            "<p>Device restarting in 3 seconds...</p>"
-            "<script>setTimeout(function(){window.location.href='/';}, 5000);</script>"
-            "</body></html>");
-        
+
+        request->send(200, "text/html",
+                      "<html><body "
+                      "style='background:#1a1a1a;color:#e0e0e0;font-family:Arial;text-align:center;"
+                      "padding:50px;'>"
+                      "<h1>Device Reset Complete</h1>"
+                      "<p>Device restarting in 3 seconds...</p>"
+                      "<script>setTimeout(function(){window.location.href='/';}, 5000);</script>"
+                      "</body></html>");
+
         // Just schedule device reset - do all clearing in main loop
         deviceResetScheduled = millis() + 3000;
     });
-    
+
     // API endpoint to get detected devices
-    server.on("/api/devices", HTTP_GET, [](AsyncWebServerRequest *request) {
+    server.on("/api/devices", HTTP_GET, [](AsyncWebServerRequest* request) {
         lastConfigActivity = millis();
-        
+
         String json = "{\"devices\":[";
-        
+
         unsigned long currentTime = millis();
-        
+
         for (size_t i = 0; i < devices.size(); i++) {
-            if (i > 0) json += ",";
-            
+            if (i > 0)
+                json += ",";
+
             String alias = getDeviceAlias(devices[i].macAddress);
             String filterDesc = devices[i].filterDescription;
             if (filterDesc.length() == 0 && devices[i].matchedFilter) {
                 filterDesc = String(devices[i].matchedFilter);
             }
-            
+
             // Calculate time since last seen
-            unsigned long timeSince = (currentTime >= devices[i].lastSeen) ? 
-                                     (currentTime - devices[i].lastSeen) : 0;
-            
+            unsigned long timeSince =
+                (currentTime >= devices[i].lastSeen) ? (currentTime - devices[i].lastSeen) : 0;
+
             json += "{";
             json += "\"mac\":\"" + devices[i].macAddress + "\",";
             json += "\"rssi\":" + String(devices[i].rssi) + ",";
@@ -1855,25 +1898,25 @@ void startConfigMode() {
             json += "\"timeSince\":" + String(timeSince);
             json += "}";
         }
-        
+
         json += "],";
         json += "\"currentTime\":" + String(currentTime);
         json += "}";
-        
+
         request->send(200, "application/json", json);
     });
-    
+
     // API endpoint to save device alias
-    server.on("/api/alias", HTTP_POST, [](AsyncWebServerRequest *request) {
+    server.on("/api/alias", HTTP_POST, [](AsyncWebServerRequest* request) {
         lastConfigActivity = millis();
-        
+
         if (request->hasParam("mac", true) && request->hasParam("alias", true)) {
             String mac = request->getParam("mac", true)->value();
             String alias = request->getParam("alias", true)->value();
-            
+
             setDeviceAlias(mac, alias);
             saveDeviceAliases();
-            
+
             if (isSerialConnected()) {
                 if (alias.length() > 0) {
                     Serial.println("Alias saved: " + mac + " -> \"" + alias + "\"");
@@ -1881,55 +1924,56 @@ void startConfigMode() {
                     Serial.println("Alias removed: " + mac);
                 }
             }
-            
+
             request->send(200, "application/json", "{\"success\":true}");
         } else {
-            request->send(400, "application/json", "{\"success\":false,\"error\":\"Missing parameters\"}");
+            request->send(400, "application/json",
+                          "{\"success\":false,\"error\":\"Missing parameters\"}");
         }
     });
-    
+
     // API endpoint to clear device history
-    server.on("/api/clear-devices", HTTP_POST, [](AsyncWebServerRequest *request) {
+    server.on("/api/clear-devices", HTTP_POST, [](AsyncWebServerRequest* request) {
         lastConfigActivity = millis();
-        
+
         clearDetectedDevices();
-        
+
         if (isSerialConnected()) {
             Serial.println("Device history cleared via web interface");
         }
-        
+
         request->send(200, "application/json", "{\"success\":true}");
     });
-    
+
     // API endpoint to lock/burn-in configuration
-    server.on("/api/lock-config", HTTP_POST, [](AsyncWebServerRequest *request) {
+    server.on("/api/lock-config", HTTP_POST, [](AsyncWebServerRequest* request) {
         lastConfigActivity = millis();
-        
+
         if (isSerialConnected()) {
             Serial.println("======================================");
             Serial.println("CONFIGURATION LOCK REQUESTED");
             Serial.println("Saving current form values before locking...");
             Serial.println("======================================");
         }
-        
+
         // Process and save current form values (same logic as /save endpoint)
         targetFilters.clear();
-        
+
         // Process OUI entries
         if (request->hasParam("ouis", true)) {
             String ouiData = request->getParam("ouis", true)->value();
             ouiData.trim();
-            
+
             if (isSerialConnected()) {
                 Serial.println("Received OUI data length: " + String(ouiData.length()));
                 Serial.println("OUI data: [" + ouiData + "]");
             }
-            
+
             if (ouiData.length() > 0) {
                 // Split by newlines and process each OUI
                 int start = 0;
                 int end = ouiData.indexOf('\n');
-                
+
                 while (start < ouiData.length()) {
                     String oui;
                     if (end == -1) {
@@ -1940,10 +1984,10 @@ void startConfigMode() {
                         start = end + 1;
                         end = ouiData.indexOf('\n', start);
                     }
-                    
+
                     oui.trim();
                     oui.replace("\r", ""); // Remove carriage returns
-                    
+
                     if (oui.length() > 0 && isValidMAC(oui)) {
                         TargetFilter filter;
                         filter.identifier = oui;
@@ -1954,22 +1998,22 @@ void startConfigMode() {
                 }
             }
         }
-        
+
         // Process MAC address entries
         if (request->hasParam("macs", true)) {
             String macData = request->getParam("macs", true)->value();
             macData.trim();
-            
+
             if (isSerialConnected()) {
                 Serial.println("Received MAC data length: " + String(macData.length()));
                 Serial.println("MAC data: [" + macData + "]");
             }
-            
+
             if (macData.length() > 0) {
                 // Split by newlines and process each MAC
                 int start = 0;
                 int end = macData.indexOf('\n');
-                
+
                 while (start < macData.length()) {
                     String mac;
                     if (end == -1) {
@@ -1980,10 +2024,10 @@ void startConfigMode() {
                         start = end + 1;
                         end = macData.indexOf('\n', start);
                     }
-                    
+
                     mac.trim();
                     mac.replace("\r", ""); // Remove carriage returns
-                    
+
                     if (mac.length() > 0 && isValidMAC(mac)) {
                         TargetFilter filter;
                         filter.identifier = mac;
@@ -1994,11 +2038,11 @@ void startConfigMode() {
                 }
             }
         }
-        
+
         // Process buzzer and LED toggles
         buzzerEnabled = request->hasParam("buzzerEnabled", true);
         ledEnabled = request->hasParam("ledEnabled", true);
-        
+
         // Process WiFi credentials
         if (request->hasParam("ap_ssid", true)) {
             String newSSID = request->getParam("ap_ssid", true)->value();
@@ -2007,45 +2051,47 @@ void startConfigMode() {
                 AP_SSID = newSSID;
             }
         }
-        
+
         if (request->hasParam("ap_password", true)) {
             String newPassword = request->getParam("ap_password", true)->value();
             newPassword.trim();
             // Allow empty password for open network, or 8-63 chars
-            if (newPassword.length() == 0 || (newPassword.length() >= 8 && newPassword.length() <= 63)) {
+            if (newPassword.length() == 0 ||
+                (newPassword.length() >= 8 && newPassword.length() <= 63)) {
                 AP_PASSWORD = newPassword;
             }
         }
-        
+
         // Save WiFi credentials
         saveWiFiCredentials();
-        
+
         // Save configuration (even if empty - that's what user wants)
         saveConfiguration();
-        
+
         if (isSerialConnected()) {
             Serial.println("Buzzer enabled: " + String(buzzerEnabled ? "Yes" : "No"));
             Serial.println("LED enabled: " + String(ledEnabled ? "Yes" : "No"));
             Serial.println("WiFi SSID: " + AP_SSID);
-            Serial.println("WiFi Password: " + String(AP_PASSWORD.length() > 0 ? "********" : "(Open Network)"));
+            Serial.println("WiFi Password: " +
+                           String(AP_PASSWORD.length() > 0 ? "********" : "(Open Network)"));
             Serial.println("Saved " + String(targetFilters.size()) + " filters before locking:");
             for (const TargetFilter& filter : targetFilters) {
                 String type = filter.isFullMAC ? "Full MAC" : "OUI";
                 Serial.println("  - " + filter.identifier + " (" + type + ")");
             }
         }
-        
+
         // Set the lock flag
         preferences.begin("ouispy", false);
         preferences.putBool("configLocked", true);
         preferences.end();
-        
+
         if (isSerialConnected()) {
             Serial.println("Configuration locked successfully!");
             Serial.println("Device will skip config mode on next boot");
             Serial.println("Reflash firmware to unlock");
         }
-        
+
         String responseHTML = R"html(
 <!DOCTYPE html>
 <html>
@@ -2053,11 +2099,11 @@ void startConfigMode() {
     <title>Configuration Locked</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            margin: 0; 
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
             padding: 20px;
-            background: linear-gradient(135deg, #1a1a1a 0%, #0a0a0a 100%); 
+            background: linear-gradient(135deg, #1a1a1a 0%, #0a0a0a 100%);
             color: #e0e0e0;
             text-align: center;
             min-height: 100vh;
@@ -2065,45 +2111,45 @@ void startConfigMode() {
             align-items: center;
             justify-content: center;
         }
-        .container { 
-            max-width: 750px; 
-            margin: 0 auto; 
+        .container {
+            max-width: 750px;
+            margin: 0 auto;
             background: linear-gradient(135deg, #2d2d2d 0%, #1a1a1a 100%);
-            padding: 50px; 
-            border-radius: 16px; 
-            box-shadow: 0 8px 32px rgba(0,0,0,0.5); 
+            padding: 50px;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
             border: 2px solid rgba(139, 0, 0, 0.3);
         }
-        h1 { 
-            color: #ff6b6b; 
+        h1 {
+            color: #ff6b6b;
             margin-bottom: 30px;
             font-size: 32px;
             font-weight: 600;
             letter-spacing: 1px;
             text-transform: uppercase;
         }
-        .warning { 
+        .warning {
             background: linear-gradient(135deg, #1a0a0a 0%, #2d0a0a 100%);
-            color: #ffcccc; 
-            border: 2px solid #8b0000; 
-            padding: 25px; 
-            border-radius: 10px; 
-            margin: 25px 0; 
+            color: #ffcccc;
+            border: 2px solid #8b0000;
+            padding: 25px;
+            border-radius: 10px;
+            margin: 25px 0;
             font-weight: 500;
             box-shadow: 0 4px 15px rgba(139, 0, 0, 0.3);
         }
         .info {
             background: linear-gradient(135deg, #0a1a0a 0%, #0a2d0a 100%);
-            color: #ccffcc; 
-            border: 1px solid #166534; 
-            padding: 25px; 
-            border-radius: 10px; 
+            color: #ccffcc;
+            border: 1px solid #166534;
+            padding: 25px;
+            border-radius: 10px;
             margin: 25px 0;
             box-shadow: 0 2px 10px rgba(22, 101, 52, 0.2);
         }
-        p { 
-            line-height: 1.8; 
-            margin: 15px 0; 
+        p {
+            line-height: 1.8;
+            margin: 15px 0;
             font-size: 15px;
         }
         .status-item {
@@ -2152,15 +2198,15 @@ void startConfigMode() {
 </body>
 </html>
 )html";
-        
+
         request->send(200, "text/html", responseHTML);
-        
+
         // Schedule normal restart after 3 seconds (NOT factory reset)
         normalRestartScheduled = millis() + 3000;
     });
-    
+
     server.begin();
-    
+
     if (isSerialConnected()) {
         Serial.println("Web server started!");
     }
@@ -2169,17 +2215,18 @@ void startConfigMode() {
 // ================================
 // BLE Advertised Device Callback Class
 // ================================
-class MyAdvertisedDeviceCallbacks: public NimBLEAdvertisedDeviceCallbacks {
+class MyAdvertisedDeviceCallbacks : public NimBLEAdvertisedDeviceCallbacks {
     void onResult(NimBLEAdvertisedDevice* advertisedDevice) {
-        if (currentMode != SCANNING_MODE) return;
-        
+        if (currentMode != SCANNING_MODE)
+            return;
+
         String mac = advertisedDevice->getAddress().toString().c_str();
         int rssi = advertisedDevice->getRSSI();
         unsigned long currentMillis = millis();
 
         String matchedDescription;
         bool matchFound = matchesTargetFilter(mac, matchedDescription);
-        
+
         if (matchFound) {
             bool known = false;
             for (auto& dev : devices) {
@@ -2203,7 +2250,7 @@ class MyAdvertisedDeviceCallbacks: public NimBLEAdvertisedDeviceCallbacks {
                         matchedFilter = matchedDescription;
                         matchType = "RE-30s";
                         newMatchFound = true;
-                        
+
                         threeBeeps();
                         dev.inCooldown = true;
                         dev.cooldownUntil = currentMillis + 10000;
@@ -2214,7 +2261,7 @@ class MyAdvertisedDeviceCallbacks: public NimBLEAdvertisedDeviceCallbacks {
                         matchedFilter = matchedDescription;
                         matchType = "RE-3s";
                         newMatchFound = true;
-                        
+
                         twoBeeps();
                         dev.inCooldown = true;
                         dev.cooldownUntil = currentMillis + 3000;
@@ -2243,9 +2290,9 @@ class MyAdvertisedDeviceCallbacks: public NimBLEAdvertisedDeviceCallbacks {
                 matchedFilter = matchedDescription;
                 matchType = "NEW";
                 newMatchFound = true;
-                
+
                 threeBeeps();
-                
+
                 auto& dev = devices.back();
                 dev.inCooldown = true;
                 dev.cooldownUntil = currentMillis + 3000;
@@ -2256,12 +2303,12 @@ class MyAdvertisedDeviceCallbacks: public NimBLEAdvertisedDeviceCallbacks {
 
 void startScanningMode() {
     currentMode = SCANNING_MODE;
-    
+
     // Stop web server and WiFi
     server.end();
     WiFi.softAPdisconnect(true);
     WiFi.mode(WIFI_OFF);
-    
+
     if (isSerialConnected()) {
         Serial.println("\n=== STARTING SCANNING MODE ===");
         Serial.println("Configured Filters:");
@@ -2271,11 +2318,11 @@ void startScanningMode() {
         }
         Serial.println("==============================\n");
     }
-    
+
     // Initialize BLE (but don't start scanning yet)
     NimBLEDevice::init("");
     delay(1000);
-    
+
     // Setup BLE scanning (but don't start)
     pBLEScan = NimBLEDevice::getScan();
     if (pBLEScan != nullptr) {
@@ -2284,64 +2331,76 @@ void startScanningMode() {
         pBLEScan->setInterval(300);
         pBLEScan->setWindow(200);
     }
-    
+
     // Ready to scan - ascending beeps (no interference possible)
     delay(500);
     ascendingBeeps();
-    
+
     // 2-second pause after ready signal
     delay(2000);
-    
+
     // NOW start BLE scanning - after ready signal is complete
     if (pBLEScan != nullptr) {
         pBLEScan->start(3, nullptr, false);
-        
+
         if (isSerialConnected()) {
             Serial.println("BLE scanning started!");
         }
     }
 }
 
-
-
 // ================================
 // Setup Function
 // ================================
 void setup() {
     delay(2000);
-    
+
     // Initialize Serial first
     Serial.begin(115200);
     delay(1000);
-    
+
     // Print ASCII art banner
     Serial.println("\n\n");
-    Serial.println("        _________        .__                       .__    __________               .__              ");
-    Serial.println("        \\_   ___ \\  ____ |  |   ____   ____   ____ |  |   \\______   \\_____    ____ |__| ____        ");
-    Serial.println("        /    \\  \\/ /  _ \\|  |  /  _ \\ /    \\_/ __ \\|  |    |     ___/\\__  \\  /    \\|  |/ ___\\       ");
-    Serial.println("        \\     \\___(  <_> )  |_(  <_> )   |  \\  ___/|  |__  |    |     / __ \\|   |  \\  \\  \\___       ");
-    Serial.println("         \\______  /\\____/|____/\\____/|___|  /\\___  >____/  |____|    (____  /___|  /__/\\___  >      ");
-    Serial.println("                \\/                        \\/     \\/                       \\/     \\/        \\/       ");
-    Serial.println("             .__                                     .___      __                 __                ");
-    Serial.println("  ____  __ __|__|           ____________ ___.__.   __| _/_____/  |_  ____   _____/  |_  ___________ ");
-    Serial.println(" /  _ \\|  |  \\  |  ______  /  ___/\\____ <   |  |  / __ |/ __ \\   __\\/ __ \\_/ ___\\   __\\/  _ \\_  __ \\");
-    Serial.println("(  <_> )  |  /  | /_____/  \\___ \\ |  |_> >___  | / /_/ \\  ___/|  | \\  ___/\\  \\___|  | (  <_> )  | \\/");
-    Serial.println(" \\____/|____/|__|         /____  >|   __// ____| \\____ |\\___  >__|  \\___  >\\___  >__|  \\____/|__|   ");
-    Serial.println("                               \\/ |__|   \\/           \\/    \\/          \\/     \\/                   ");
+    Serial.println("        _________        .__                       .__    __________           "
+                   "    .__              ");
+    Serial.println("        \\_   ___ \\  ____ |  |   ____   ____   ____ |  |   \\______   \\_____ "
+                   "   ____ |__| ____        ");
+    Serial.println("        /    \\  \\/ /  _ \\|  |  /  _ \\ /    \\_/ __ \\|  |    |     "
+                   "___/\\__  \\  /    \\|  |/ ___\\       ");
+    Serial.println("        \\     \\___(  <_> )  |_(  <_> )   |  \\  ___/|  |__  |    |     / __ "
+                   "\\|   |  \\  \\  \\___       ");
+    Serial.println("         \\______  /\\____/|____/\\____/|___|  /\\___  >____/  |____|    (____ "
+                   " /___|  /__/\\___  >      ");
+    Serial.println("                \\/                        \\/     \\/                       "
+                   "\\/     \\/        \\/       ");
+    Serial.println("             .__                                     .___      __              "
+                   "   __                ");
+    Serial.println("  ____  __ __|__|           ____________ ___.__.   __| _/_____/  |_  ____   "
+                   "_____/  |_  ___________ ");
+    Serial.println(" /  _ \\|  |  \\  |  ______  /  ___/\\____ <   |  |  / __ |/ __ \\   __\\/ __ "
+                   "\\_/ ___\\   __\\/  _ \\_  __ \\");
+    Serial.println("(  <_> )  |  /  | /_____/  \\___ \\ |  |_> >___  | / /_/ \\  ___/|  | \\  "
+                   "___/\\  \\___|  | (  <_> )  | \\/");
+    Serial.println(" \\____/|____/|__|         /____  >|   __// ____| \\____ |\\___  >__|  \\___  "
+                   ">\\___  >__|  \\____/|__|   ");
+    Serial.println("                               \\/ |__|   \\/           \\/    \\/          "
+                   "\\/     \\/                   ");
     Serial.println("\n");
-    
+
     // Randomize MAC address on each boot
     uint8_t newMAC[6];
     WiFi.macAddress(newMAC);
-    
+
     Serial.print("Original MAC: ");
     for (int i = 0; i < 6; i++) {
-        if (newMAC[i] < 16) Serial.print("0");
+        if (newMAC[i] < 16)
+            Serial.print("0");
         Serial.print(newMAC[i], HEX);
-        if (i < 5) Serial.print(":");
+        if (i < 5)
+            Serial.print(":");
     }
     Serial.println();
-    
+
     // STEALTH MODE: Randomize ALL 6 bytes for maximum anonymity
     randomSeed(analogRead(0) + micros()); // Better randomization
     for (int i = 0; i < 6; i++) {
@@ -2350,54 +2409,56 @@ void setup() {
     // Ensure it's a valid locally administered address
     newMAC[0] |= 0x02; // Set locally administered bit
     newMAC[0] &= 0xFE; // Clear multicast bit
-    
+
     // Set the randomized MAC for both STA and AP modes
     WiFi.mode(WIFI_STA);
     esp_wifi_set_mac(WIFI_IF_STA, newMAC);
-    
+
     Serial.print("Randomized MAC: ");
     for (int i = 0; i < 6; i++) {
-        if (newMAC[i] < 16) Serial.print("0");
+        if (newMAC[i] < 16)
+            Serial.print("0");
         Serial.print(newMAC[i], HEX);
-        if (i < 5) Serial.print(":");
+        if (i < 5)
+            Serial.print(":");
     }
     Serial.println();
-    
+
     // Silence ESP-IDF logs
     esp_log_level_set("*", ESP_LOG_NONE);
-    
+
     initializeBuzzer();
-    
+
     // Test buzzer
     singleBeep();
     delay(500);
-    
+
     initializeNeoPixel();
-    
+
     // Test NeoPixel
     setNeoPixelColor(255, 0, 255); // Bright pink
     delay(1000);
     setNeoPixelColor(128, 0, 255); // Purple
     delay(1000);
-    
+
     // Check for factory reset flag first
     preferences.begin("ouispy", true); // read-only
     bool factoryReset = preferences.getBool("factoryReset", false);
     preferences.end();
-    
+
     if (factoryReset) {
         Serial.println("FACTORY RESET FLAG DETECTED - Clearing all data...");
-        
+
         // Clear the factory reset flag and all data
         preferences.begin("ouispy", false);
         preferences.clear(); // Wipe everything
         preferences.end();
-        
+
         // Clear in-memory data
         targetFilters.clear();
         deviceAliases.clear();
         devices.clear();
-        
+
         Serial.println("Factory reset complete - starting with clean state");
     } else {
         // Load configuration from NVS
@@ -2406,19 +2467,19 @@ void setup() {
         loadDeviceAliases();
         loadDetectedDevices();
     }
-    
+
     // Check if configuration is locked/burned in
     preferences.begin("ouispy", true);
     bool configLocked = preferences.getBool("configLocked", false);
     preferences.end();
-    
+
     if (configLocked) {
         Serial.println("======================================");
         Serial.println("CONFIGURATION LOCKED (BURNED IN)");
         Serial.println("Skipping config mode - going straight to scanning");
         Serial.println("To enable config mode: reflash firmware");
         Serial.println("======================================");
-        
+
         // Start scanning immediately
         startScanningMode();
     } else {
@@ -2436,33 +2497,34 @@ void loop() {
     static unsigned long lastCleanupTime = 0;
     static unsigned long lastStatusTime = 0;
     unsigned long currentMillis = millis();
-    
+
     if (currentMode == CONFIG_MODE) {
         // Check for scheduled normal restart (from burn-in config)
         if (normalRestartScheduled > 0 && currentMillis >= normalRestartScheduled) {
             if (isSerialConnected()) {
                 Serial.println("Scheduled normal restart - rebooting with locked configuration...");
             }
-            
-            delay(500); // Give time for any pending operations
+
+            delay(500);    // Give time for any pending operations
             ESP.restart(); // Simple restart - settings preserved
         }
-        
+
         // Check for scheduled device reset (from web device reset)
         if (deviceResetScheduled > 0 && currentMillis >= deviceResetScheduled) {
             if (isSerialConnected()) {
-                Serial.println("Scheduled device reset - setting factory reset flag and restarting...");
+                Serial.println(
+                    "Scheduled device reset - setting factory reset flag and restarting...");
             }
-            
+
             // Just set a factory reset flag - much safer than complex NVS operations
             preferences.begin("ouispy", false);
             preferences.putBool("factoryReset", true);
             preferences.end();
-            
-            delay(500); // Give time for NVS write
+
+            delay(500);    // Give time for NVS write
             ESP.restart(); // Restart - clearing will happen safely on boot
         }
-        
+
         // Check for scheduled mode switch (from web config save)
         if (modeSwitchScheduled > 0 && currentMillis >= modeSwitchScheduled) {
             if (isSerialConnected()) {
@@ -2472,21 +2534,26 @@ void loop() {
             startScanningMode();
             return;
         }
-        
-        // Check for config timeout 
+
+        // Check for config timeout
         if (targetFilters.size() == 0) {
             // No saved filters - stay in config mode indefinitely
-            if (currentMillis - configStartTime > CONFIG_TIMEOUT && lastConfigActivity == configStartTime) {
+            if (currentMillis - configStartTime > CONFIG_TIMEOUT &&
+                lastConfigActivity == configStartTime) {
                 if (isSerialConnected()) {
-                    Serial.println("No one connected and no saved filters - staying in config mode");
-                    Serial.println("Connect to '" + AP_SSID + "' AP to configure your first filters!");
+                    Serial.println(
+                        "No one connected and no saved filters - staying in config mode");
+                    Serial.println("Connect to '" + AP_SSID +
+                                   "' AP to configure your first filters!");
                 }
             }
         } else if (targetFilters.size() > 0) {
             // Have saved filters - timeout only if no one connected
-            if (currentMillis - configStartTime > CONFIG_TIMEOUT && lastConfigActivity == configStartTime) {
+            if (currentMillis - configStartTime > CONFIG_TIMEOUT &&
+                lastConfigActivity == configStartTime) {
                 if (isSerialConnected()) {
-                    Serial.println("No one connected within 20s - using saved filters, switching to scanning mode");
+                    Serial.println("No one connected within 20s - using saved filters, switching "
+                                   "to scanning mode");
                 }
                 startScanningMode();
             } else if (lastConfigActivity > configStartTime) {
@@ -2494,25 +2561,26 @@ void loop() {
                 if (isSerialConnected() && currentMillis - configStartTime > CONFIG_TIMEOUT) {
                     static unsigned long lastConnectedMsg = 0;
                     if (currentMillis - lastConnectedMsg > 30000) { // Print every 30s
-                        Serial.println("Web interface connected - waiting for configuration submission...");
+                        Serial.println(
+                            "Web interface connected - waiting for configuration submission...");
                         lastConnectedMsg = currentMillis;
                     }
                 }
             }
         }
-        
+
         // Handle web server
         delay(100);
         return;
     }
-    
+
     // Scanning mode loop
     if (currentMode == SCANNING_MODE) {
         // Handle match detection messages (JSON output for API)
         if (newMatchFound) {
             if (isSerialConnected()) {
                 String alias = getDeviceAlias(detectedMAC);
-                
+
                 // Output clean JSON
                 Serial.print("{\"mac\":\"");
                 Serial.print(detectedMAC);
@@ -2524,7 +2592,7 @@ void loop() {
             }
             newMatchFound = false;
         }
-        
+
         // Restart BLE scan every 3 seconds
         if (currentMillis - lastScanTime >= 3000) {
             pBLEScan->stop();
@@ -2544,9 +2612,9 @@ void loop() {
             lastStatusTime = currentMillis;
         }
     }
-    
+
     // Update NeoPixel animation
     updateNeoPixelAnimation();
-    
+
     delay(100);
-} 
+}

@@ -12,20 +12,20 @@
 #include <nvs_flash.h>
 
 // HAL
-#include "hal/pins.h"
-#include "hal/buzzer.h"
-#include "hal/led.h"
-#include "hal/neopixel.h"
-#include "hal/mac_util.h"
-#include "hal/gps.h"
 #include "hal/ble_mgr.h"
+#include "hal/buzzer.h"
+#include "hal/gps.h"
+#include "hal/led.h"
+#include "hal/mac_util.h"
+#include "hal/neopixel.h"
+#include "hal/pins.h"
 #include "hal/wifi_mgr.h"
 
 // Modules
-#include "modules/module.h"
 #include "modules/detector.h"
-#include "modules/foxhunter.h"
 #include "modules/flockyou.h"
+#include "modules/foxhunter.h"
+#include "modules/module.h"
 #include "modules/skyspy.h"
 
 // Web
@@ -35,10 +35,10 @@
 // Module Instances
 // ============================================================================
 
-static DetectorModule   modDetector;
-static FoxhunterModule  modFoxhunter;
-static FlockyouModule   modFlockyou;
-static SkySpyModule     modSkyspy;
+static DetectorModule modDetector;
+static FoxhunterModule modFoxhunter;
+static FlockyouModule modFlockyou;
+static SkySpyModule modSkyspy;
 
 static IDetectionModule* modules[] = {
     &modDetector,

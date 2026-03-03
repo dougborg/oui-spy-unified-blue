@@ -1,8 +1,8 @@
 #pragma once
 
+#include "pins.h"
 #include <Arduino.h>
 #include <TinyGPS++.h>
-#include "pins.h"
 
 // ============================================================================
 // Shared GPS Service (hardware L76K GNSS + phone browser geolocation)
@@ -15,10 +15,10 @@ struct GPSData {
     double lon;
     float accuracy;
     bool valid;
-    bool isHardware;    // true = HW GPS, false = phone
+    bool isHardware; // true = HW GPS, false = phone
     int satellites;
-    bool hwDetected;    // Module physically present
-    bool hwFix;         // Has a valid position fix
+    bool hwDetected; // Module physically present
+    bool hwFix;      // Has a valid position fix
     unsigned long lastUpdate;
 };
 

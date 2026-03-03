@@ -41,7 +41,8 @@ void wifiUpdate() {
 }
 
 void wifiEnablePromiscuous(WiFiFrameCallback cb, uint8_t channel) {
-    if (_promiscuousEnabled) return;
+    if (_promiscuousEnabled)
+        return;
     esp_wifi_set_promiscuous(true);
     esp_wifi_set_promiscuous_rx_cb(cb);
     esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
@@ -50,7 +51,8 @@ void wifiEnablePromiscuous(WiFiFrameCallback cb, uint8_t channel) {
 }
 
 void wifiDisablePromiscuous() {
-    if (!_promiscuousEnabled) return;
+    if (!_promiscuousEnabled)
+        return;
     esp_wifi_set_promiscuous(false);
     _promiscuousEnabled = false;
     Serial.println("[HAL] WiFi promiscuous mode OFF");

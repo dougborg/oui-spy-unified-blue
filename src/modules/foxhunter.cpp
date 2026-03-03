@@ -1,8 +1,8 @@
 #include "foxhunter.h"
-#include "../hal/buzzer.h"
-#include "../hal/neopixel.h"
-#include "../hal/led.h"
 #include "../hal/ble_mgr.h"
+#include "../hal/buzzer.h"
+#include "../hal/led.h"
+#include "../hal/neopixel.h"
 #include <Preferences.h>
 
 // ============================================================================
@@ -27,8 +27,10 @@ static void foxLoadConfig() {
     p.begin("tracker", true);
     foxTargetMAC = p.getString("targetMAC", "");
     p.end();
-    if (foxTargetMAC.length() > 0) foxTargetMAC.toUpperCase();
-    Serial.printf("[FOXHUNTER] Target: %s\n", foxTargetMAC.length() > 0 ? foxTargetMAC.c_str() : "(none)");
+    if (foxTargetMAC.length() > 0)
+        foxTargetMAC.toUpperCase();
+    Serial.printf("[FOXHUNTER] Target: %s\n",
+                  foxTargetMAC.length() > 0 ? foxTargetMAC.c_str() : "(none)");
 }
 
 static void foxSaveConfig() {
@@ -51,7 +53,8 @@ void FoxhunterModule::setup() {
 }
 
 void FoxhunterModule::loop() {
-    if (!_enabled) return;
+    if (!_enabled)
+        return;
 
     unsigned long now = millis();
 
@@ -73,7 +76,8 @@ void FoxhunterModule::loop() {
 }
 
 void FoxhunterModule::onBLEAdvertisement(NimBLEAdvertisedDevice* device) {
-    if (!_enabled || foxTargetMAC.length() == 0) return;
+    if (!_enabled || foxTargetMAC.length() == 0)
+        return;
 
     String mac = device->getAddress().toString().c_str();
     mac.toUpperCase();
@@ -102,11 +106,9 @@ void FoxhunterModule::registerRoutes(AsyncWebServer& server) {
     server.on("/api/foxhunter/status", HTTP_GET, [](AsyncWebServerRequest* r) {
         char buf[200];
         snprintf(buf, sizeof(buf),
-            "{\"target\":\"%s\",\"detected\":%s,\"rssi\":%d,\"lastSeen\":%lu}",
-            foxTargetMAC.c_str(),
-            foxTargetDetected ? "true" : "false",
-            foxCurrentRSSI,
-            foxLastTargetSeen);
+                 "{\"target\":\"%s\",\"detected\":%s,\"rssi\":%d,\"lastSeen\":%lu}",
+                 foxTargetMAC.c_str(), foxTargetDetected ? "true" : "false", foxCurrentRSSI,
+                 foxLastTargetSeen);
         r->send(200, "application/json", buf);
     });
 
@@ -135,8 +137,8 @@ void FoxhunterModule::registerRoutes(AsyncWebServer& server) {
     // Get live RSSI (for polling)
     server.on("/api/foxhunter/rssi", HTTP_GET, [](AsyncWebServerRequest* r) {
         char buf[64];
-        snprintf(buf, sizeof(buf), "{\"rssi\":%d,\"detected\":%s}",
-                 foxCurrentRSSI, foxTargetDetected ? "true" : "false");
+        snprintf(buf, sizeof(buf), "{\"rssi\":%d,\"detected\":%s}", foxCurrentRSSI,
+                 foxTargetDetected ? "true" : "false");
         r->send(200, "application/json", buf);
     });
 
@@ -153,7 +155,9 @@ void FoxhunterModule::registerRoutes(AsyncWebServer& server) {
     Serial.println("[FOXHUNTER] Web routes registered");
 }
 
-bool FoxhunterModule::isEnabled() { return _enabled; }
+bool FoxhunterModule::isEnabled() {
+    return _enabled;
+}
 void FoxhunterModule::setEnabled(bool enabled) {
     _enabled = enabled;
     foxEnabled = enabled;

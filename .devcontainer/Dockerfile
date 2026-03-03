@@ -14,6 +14,7 @@ RUN apt-get update \
         curl \
         ca-certificates \
         udev \
+        cppcheck \
         just \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
@@ -22,7 +23,7 @@ USER vscode
 
 RUN python3 -m venv /home/vscode/.venv/pio \
     && /home/vscode/.venv/pio/bin/pip install --upgrade pip \
-    && /home/vscode/.venv/pio/bin/pip install platformio esptool pyserial
+    && /home/vscode/.venv/pio/bin/pip install platformio esptool pyserial pytest pre-commit
 
 ENV PATH="/home/vscode/.venv/pio/bin:/home/vscode/.local/bin:${PATH}"
 

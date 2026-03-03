@@ -8,7 +8,7 @@ namespace hal {
 static Adafruit_NeoPixel _strip(1, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
 
 static NeoPixelState _state = NEO_IDLE_BREATHING;
-static uint16_t _idleHue = 300;     // Default: pink
+static uint16_t _idleHue = 300; // Default: pink
 static uint16_t _heartbeatHue = 300;
 
 // Flash state
@@ -21,7 +21,9 @@ static unsigned long _breatheLastUpdate = 0;
 static float _breatheBrightness = 0.0;
 static bool _breatheIncreasing = true;
 
-Adafruit_NeoPixel& neopixelStrip() { return _strip; }
+Adafruit_NeoPixel& neopixelStrip() {
+    return _strip;
+}
 
 uint32_t hsvToRgb(uint16_t h, uint8_t s, uint8_t v) {
     uint8_t r, g, b;
@@ -36,12 +38,36 @@ uint32_t hsvToRgb(uint16_t h, uint8_t s, uint8_t v) {
         uint8_t q = (v * (255 - ((s * remainder) >> 8))) >> 8;
         uint8_t t = (v * (255 - ((s * (255 - remainder)) >> 8))) >> 8;
         switch (region) {
-            case 0: r = v; g = t; b = p; break;
-            case 1: r = q; g = v; b = p; break;
-            case 2: r = p; g = v; b = t; break;
-            case 3: r = p; g = q; b = v; break;
-            case 4: r = t; g = p; b = v; break;
-            default: r = v; g = p; b = q; break;
+        case 0:
+            r = v;
+            g = t;
+            b = p;
+            break;
+        case 1:
+            r = q;
+            g = v;
+            b = p;
+            break;
+        case 2:
+            r = p;
+            g = v;
+            b = t;
+            break;
+        case 3:
+            r = p;
+            g = q;
+            b = v;
+            break;
+        case 4:
+            r = t;
+            g = p;
+            b = v;
+            break;
+        default:
+            r = v;
+            g = p;
+            b = q;
+            break;
         }
     }
     return _strip.Color(r, g, b);
@@ -86,7 +112,8 @@ void neopixelOff() {
 
 // Breathing animation
 static void updateBreathing() {
-    if (millis() - _breatheLastUpdate < 20) return;
+    if (millis() - _breatheLastUpdate < 20)
+        return;
     _breatheLastUpdate = millis();
 
     if (_breatheIncreasing) {
@@ -136,17 +163,17 @@ void neopixelUpdate() {
     }
 
     switch (_state) {
-        case NEO_DETECTION_FLASH:
-            // If flash was triggered via state (shouldn't normally happen)
-            updateFlash();
-            break;
-        case NEO_HEARTBEAT_GLOW:
-            updateHeartbeat();
-            break;
-        case NEO_IDLE_BREATHING:
-        default:
-            updateBreathing();
-            break;
+    case NEO_DETECTION_FLASH:
+        // If flash was triggered via state (shouldn't normally happen)
+        updateFlash();
+        break;
+    case NEO_HEARTBEAT_GLOW:
+        updateHeartbeat();
+        break;
+    case NEO_IDLE_BREATHING:
+    default:
+        updateBreathing();
+        break;
     }
 }
 

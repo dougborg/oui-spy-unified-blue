@@ -1,8 +1,8 @@
 #pragma once
 
 #include <Arduino.h>
-#include <NimBLEAdvertisedDevice.h>
 #include <ESPAsyncWebServer.h>
+#include <NimBLEAdvertisedDevice.h>
 #include <esp_wifi.h>
 
 // ============================================================================
@@ -11,7 +11,7 @@
 // ============================================================================
 
 class IDetectionModule {
-public:
+  public:
     virtual ~IDetectionModule() = default;
 
     virtual const char* name() = 0;
@@ -22,7 +22,11 @@ public:
     virtual void onBLEAdvertisement(NimBLEAdvertisedDevice* device) = 0;
 
     // WiFi promiscuous frame dispatch (Sky Spy only; default no-op)
-    virtual void onWiFiFrame(const uint8_t* payload, int len, int rssi) { (void)payload; (void)len; (void)rssi; }
+    virtual void onWiFiFrame(const uint8_t* payload, int len, int rssi) {
+        (void)payload;
+        (void)len;
+        (void)rssi;
+    }
 
     // Register module-specific web routes under /api/{module}/
     virtual void registerRoutes(AsyncWebServer& server) = 0;

@@ -178,6 +178,17 @@ just flash firmware/my_firmware.bin
 just devcontainer-auto
 ```
 
+Quality tasks:
+
+```bash
+just setup-dev
+just test
+just test-cpp
+just analyze-cpp
+just lint
+just quality
+```
+
 ### Dependency Management
 
 Dependency sources in this repo:
@@ -192,6 +203,17 @@ Automation included:
 - Weekly `PlatformIO Dependency Smoke` workflow in `.github/workflows/platformio-dependency-smoke.yml` that installs packages and runs `pio run`
 - `CI` workflow in `.github/workflows/ci.yml` for PR/push validation (Markdown lint + PlatformIO build + artifact upload)
 - `Release Firmware` workflow in `.github/workflows/release-firmware.yml` for tag-based GitHub Releases with firmware binaries and checksums
+- `CodeQL` workflow in `.github/workflows/codeql.yml` for C/C++ security/code scanning
+
+## Testing and Quality Tooling
+
+- `pytest` tests live in `tests/` (currently focused on `flash.py` behavior)
+- PlatformIO native C++ unit tests live in `test/` and run with `pio test -e native`
+- Static analysis runs with `cppcheck` on core app sources (`src/main.cpp`, `src/hal`, `src/modules`, `src/web`) to keep CI runtime predictable
+- C/C++ formatting is standardized via `.clang-format`
+- `pre-commit` runs consistent quality checks locally and in CI (`.pre-commit-config.yaml`)
+- `requirements-dev.txt` pins test/lint tooling versions
+- CI runs quality checks (`pre-commit`, `pytest`), native C++ tests, static analysis, and firmware build validation (`pio run`)
 
 The build output lands in `.pio/build/seeed_xiao_esp32s3/firmware.bin` — copy that into `firmware/` if you want to use the flasher script instead.
 

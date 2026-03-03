@@ -30,7 +30,7 @@
       }
     }
   },
-  "postCreateCommand": "pio --version && pio pkg install -d .",
+  "postCreateCommand": "git config --global --add safe.directory ${containerWorkspaceFolder} && pio --version && pio pkg install -d .",
   "postAttachCommand": "echo 'Devcontainer ready. Build with: pio run (see .devcontainer/README.md for USB upload options).'",
   "runArgs": [
     "--init"

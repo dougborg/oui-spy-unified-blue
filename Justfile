@@ -6,6 +6,9 @@ default:
 setup:
     pio pkg install -d .
 
+setup-dev:
+    python3 -m pip install -r requirements-dev.txt
+
 build:
     pio run
 
@@ -17,6 +20,27 @@ monitor:
 
 clean:
     pio run -t clean
+
+test:
+    python3 -m pytest -q
+
+test-cpp:
+    pio test -e native
+
+lint:
+    pre-commit run --all-files
+
+analyze-cpp:
+        cppcheck --quiet --error-exitcode=1 \
+            --enable=warning,performance \
+            --inline-suppr --suppress=missingIncludeSystem \
+            -I src src/main.cpp src/hal src/modules src/web
+
+quality:
+    just lint
+    just test
+    just test-cpp
+    just analyze-cpp
 
 erase:
     python flash.py --erase

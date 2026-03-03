@@ -1,7 +1,7 @@
 #include "server.h"
-#include "dashboard.h"
 #include "../hal/buzzer.h"
 #include "../hal/gps.h"
+#include "dashboard.h"
 #include <Preferences.h>
 
 namespace web {
@@ -14,26 +14,24 @@ void serverInit() {
     // Nothing special needed
 }
 
-AsyncWebServer& getServer() { return _server; }
+AsyncWebServer& getServer() {
+    return _server;
+}
 
 void registerSystemRoutes(IDetectionModule** modules, int count) {
     _modules = modules;
     _moduleCount = count;
 
     // Dashboard HTML
-    _server.on("/", HTTP_GET, [](AsyncWebServerRequest* r) {
-        r->send(200, "text/html", DASHBOARD_HTML);
-    });
+    _server.on("/", HTTP_GET,
+               [](AsyncWebServerRequest* r) { r->send(200, "text/html", DASHBOARD_HTML); });
 
     // System status
     _server.on("/api/status", HTTP_GET, [](AsyncWebServerRequest* r) {
         char buf[256];
-        snprintf(buf, sizeof(buf),
-            "{\"uptime\":%lu,\"heap\":%u,\"psram\":%u,\"buzzer\":%s}",
-            millis() / 1000,
-            ESP.getFreeHeap(),
-            ESP.getFreePsram(),
-            hal::buzzerIsEnabled() ? "true" : "false");
+        snprintf(buf, sizeof(buf), "{\"uptime\":%lu,\"heap\":%u,\"psram\":%u,\"buzzer\":%s}",
+                 millis() / 1000, ESP.getFreeHeap(), ESP.getFreePsram(),
+                 hal::buzzerIsEnabled() ? "true" : "false");
         r->send(200, "application/json", buf);
     });
 
@@ -41,7 +39,8 @@ void registerSystemRoutes(IDetectionModule** modules, int count) {
     _server.on("/api/modules", HTTP_GET, [](AsyncWebServerRequest* r) {
         String json = "[";
         for (int i = 0; i < _moduleCount; i++) {
-            if (i > 0) json += ",";
+            if (i > 0)
+                json += ",";
             json += "{\"name\":\"";
             json += _modules[i]->name();
             json += "\",\"enabled\":";
@@ -91,14 +90,12 @@ void registerSystemRoutes(IDetectionModule** modules, int count) {
         const hal::GPSData& g = hal::gpsGet();
         char buf[256];
         snprintf(buf, sizeof(buf),
-            "{\"valid\":%s,\"lat\":%.8f,\"lon\":%.8f,\"acc\":%.1f,"
-            "\"hardware\":%s,\"hw_detected\":%s,\"hw_fix\":%s,\"sats\":%d,"
-            "\"fresh\":%s}",
-            g.valid ? "true" : "false", g.lat, g.lon, g.accuracy,
-            g.isHardware ? "true" : "false",
-            g.hwDetected ? "true" : "false",
-            g.hwFix ? "true" : "false", g.satellites,
-            hal::gpsIsFresh() ? "true" : "false");
+                 "{\"valid\":%s,\"lat\":%.8f,\"lon\":%.8f,\"acc\":%.1f,"
+                 "\"hardware\":%s,\"hw_detected\":%s,\"hw_fix\":%s,\"sats\":%d,"
+                 "\"fresh\":%s}",
+                 g.valid ? "true" : "false", g.lat, g.lon, g.accuracy,
+                 g.isHardware ? "true" : "false", g.hwDetected ? "true" : "false",
+                 g.hwFix ? "true" : "false", g.satellites, hal::gpsIsFresh() ? "true" : "false");
         r->send(200, "application/json", buf);
     });
 

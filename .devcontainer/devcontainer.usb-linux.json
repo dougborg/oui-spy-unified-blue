@@ -27,7 +27,7 @@
       }
     }
   },
-  "postCreateCommand": "pio --version && pio pkg install -d .",
+  "postCreateCommand": "git config --global --add safe.directory ${containerWorkspaceFolder} && pio --version && pio pkg install -d .",
   "runArgs": [
     "--init",
     "--privileged",

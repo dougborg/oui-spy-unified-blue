@@ -13,20 +13,20 @@
 // Optional WiFi STA connection for future features
 // ============================================================================
 
+#include "esp_wifi.h"
 #include <Arduino.h>
-#include <WiFi.h>
+#include <ArduinoJson.h>
+#include <NimBLEAdvertisedDevice.h>
 #include <NimBLEDevice.h>
 #include <NimBLEScan.h>
-#include <NimBLEAdvertisedDevice.h>
-#include <ArduinoJson.h>
 #include <Preferences.h>
 #include <SPIFFS.h>
-#include <string.h>
-#include <ctype.h>
-#include <stdio.h>
-#include <stdint.h>
-#include "esp_wifi.h"
 #include <TinyGPS++.h>
+#include <WiFi.h>
+#include <ctype.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
 
 // ============================================================================
 // CONFIGURATION
@@ -35,10 +35,10 @@
 #define BUZZER_PIN 3
 
 // Hardware GPS (Seeed L76K GNSS module)
-#define GPS_RX_PIN 44      // D7 — ESP32 RX <- GPS TX
-#define GPS_TX_PIN 43      // D6 — ESP32 TX -> GPS RX
-#define GPS_BAUD   9600
-#define GPS_HDOP_SCALE 5.0f  // HDOP * scale ≈ accuracy in meters
+#define GPS_RX_PIN 44 // D7 — ESP32 RX <- GPS TX
+#define GPS_TX_PIN 43 // D6 — ESP32 TX -> GPS RX
+#define GPS_BAUD 9600
+#define GPS_HDOP_SCALE 5.0f // HDOP * scale ≈ accuracy in meters
 
 // Audio
 #define LOW_FREQ 200
@@ -55,8 +55,8 @@
 #define FY_NEOPIXEL_DETECTION_BRIGHTNESS 200
 
 // BLE scanning
-#define BLE_SCAN_DURATION 2      // seconds per scan
-#define BLE_SCAN_INTERVAL 3000   // ms between scans
+#define BLE_SCAN_DURATION 2    // seconds per scan
+#define BLE_SCAN_INTERVAL 3000 // ms between scans
 
 // Detection storage
 #define MAX_DETECTIONS 200
@@ -72,50 +72,38 @@
 // Known Flock Safety MAC address prefixes (OUIs)
 static const char* mac_prefixes[] = {
     // FS Ext Battery devices
-    "58:8e:81", "cc:cc:cc", "ec:1b:bd", "90:35:ea", "04:0d:84",
-    "f0:82:c0", "1c:34:f1", "38:5b:44", "94:34:69", "b4:e3:f9",
+    "58:8e:81", "cc:cc:cc", "ec:1b:bd", "90:35:ea", "04:0d:84", "f0:82:c0", "1c:34:f1", "38:5b:44",
+    "94:34:69", "b4:e3:f9",
     // Flock WiFi devices
-    "70:c9:4e", "3c:91:80", "d8:f3:bc", "80:30:49", "14:5a:fc",
-    "74:4c:a1", "08:3a:88", "9c:2f:9d", "94:08:53", "e4:aa:ea"
-};
+    "70:c9:4e", "3c:91:80", "d8:f3:bc", "80:30:49", "14:5a:fc", "74:4c:a1", "08:3a:88", "9c:2f:9d",
+    "94:08:53", "e4:aa:ea"};
 
 // BLE device name patterns (matched case-insensitive substring)
-static const char* device_name_patterns[] = {
-    "FS Ext Battery",
-    "Penguin",
-    "Flock",
-    "Pigvision"
-};
+static const char* device_name_patterns[] = {"FS Ext Battery", "Penguin", "Flock", "Pigvision"};
 
 // BLE Manufacturer Company IDs
 // Source: wgreenberg/flock-you - XUNTONG ID associated with Flock Safety devices
 static const uint16_t ble_manufacturer_ids[] = {
-    0x09C8   // XUNTONG
+    0x09C8 // XUNTONG
 };
 
 // ============================================================================
 // RAVEN SURVEILLANCE DEVICE UUID PATTERNS
 // ============================================================================
 
-#define RAVEN_DEVICE_INFO_SERVICE   "0000180a-0000-1000-8000-00805f9b34fb"
-#define RAVEN_GPS_SERVICE           "00003100-0000-1000-8000-00805f9b34fb"
-#define RAVEN_POWER_SERVICE         "00003200-0000-1000-8000-00805f9b34fb"
-#define RAVEN_NETWORK_SERVICE       "00003300-0000-1000-8000-00805f9b34fb"
-#define RAVEN_UPLOAD_SERVICE        "00003400-0000-1000-8000-00805f9b34fb"
-#define RAVEN_ERROR_SERVICE         "00003500-0000-1000-8000-00805f9b34fb"
-#define RAVEN_OLD_HEALTH_SERVICE    "00001809-0000-1000-8000-00805f9b34fb"
-#define RAVEN_OLD_LOCATION_SERVICE  "00001819-0000-1000-8000-00805f9b34fb"
+#define RAVEN_DEVICE_INFO_SERVICE "0000180a-0000-1000-8000-00805f9b34fb"
+#define RAVEN_GPS_SERVICE "00003100-0000-1000-8000-00805f9b34fb"
+#define RAVEN_POWER_SERVICE "00003200-0000-1000-8000-00805f9b34fb"
+#define RAVEN_NETWORK_SERVICE "00003300-0000-1000-8000-00805f9b34fb"
+#define RAVEN_UPLOAD_SERVICE "00003400-0000-1000-8000-00805f9b34fb"
+#define RAVEN_ERROR_SERVICE "00003500-0000-1000-8000-00805f9b34fb"
+#define RAVEN_OLD_HEALTH_SERVICE "00001809-0000-1000-8000-00805f9b34fb"
+#define RAVEN_OLD_LOCATION_SERVICE "00001819-0000-1000-8000-00805f9b34fb"
 
-static const char* raven_service_uuids[] = {
-    RAVEN_DEVICE_INFO_SERVICE,
-    RAVEN_GPS_SERVICE,
-    RAVEN_POWER_SERVICE,
-    RAVEN_NETWORK_SERVICE,
-    RAVEN_UPLOAD_SERVICE,
-    RAVEN_ERROR_SERVICE,
-    RAVEN_OLD_HEALTH_SERVICE,
-    RAVEN_OLD_LOCATION_SERVICE
-};
+static const char* raven_service_uuids[] = {RAVEN_DEVICE_INFO_SERVICE, RAVEN_GPS_SERVICE,
+                                            RAVEN_POWER_SERVICE,       RAVEN_NETWORK_SERVICE,
+                                            RAVEN_UPLOAD_SERVICE,      RAVEN_ERROR_SERVICE,
+                                            RAVEN_OLD_HEALTH_SERVICE,  RAVEN_OLD_LOCATION_SERVICE};
 
 // ============================================================================
 // DETECTION STORAGE
@@ -161,27 +149,28 @@ static AsyncWebServer fyServer(80);
 // Phone GPS state (updated via browser Geolocation API -> /api/gps)
 static double fyGPSLat = 0;
 static double fyGPSLon = 0;
-static float  fyGPSAcc = 0;
-static bool   fyGPSValid = false;
+static float fyGPSAcc = 0;
+static bool fyGPSValid = false;
 static unsigned long fyGPSLastUpdate = 0;
-#define GPS_STALE_MS 30000  // GPS considered stale after 30s without update
+#define GPS_STALE_MS 30000 // GPS considered stale after 30s without update
 
 // Hardware GPS state (Seeed L76K GNSS module on UART1)
 static TinyGPSPlus fyGPS;
 static HardwareSerial fyGPSSerial(1);
-static bool fyHWGPSDetected = false;     // Any NMEA received = module present
-static bool fyHWGPSFix = false;          // Valid position fix
-static int  fyHWGPSSats = 0;             // Satellite count
+static bool fyHWGPSDetected = false; // Any NMEA received = module present
+static bool fyHWGPSFix = false;      // Valid position fix
+static int fyHWGPSSats = 0;          // Satellite count
 static unsigned long fyHWGPSLastChar = 0;
-static bool fyGPSIsHardware = false;     // Current GPS source is hardware
+static bool fyGPSIsHardware = false; // Current GPS source is hardware
 #define GPS_HW_TIMEOUT_MS 5000
 
 // Session persistence (SPIFFS)
-#define FY_SESSION_FILE  "/session.json"
-#define FY_PREV_FILE     "/prev_session.json"
-#define FY_SAVE_INTERVAL 15000  // Auto-save every 15 seconds (prevent data loss on quick power-cycle)
+#define FY_SESSION_FILE "/session.json"
+#define FY_PREV_FILE "/prev_session.json"
+#define FY_SAVE_INTERVAL                                                                           \
+    15000 // Auto-save every 15 seconds (prevent data loss on quick power-cycle)
 static unsigned long fyLastSave = 0;
-static int fyLastSaveCount = 0;  // Track changes to avoid unnecessary writes
+static int fyLastSaveCount = 0; // Track changes to avoid unnecessary writes
 static bool fySpiffsReady = false;
 
 // ============================================================================
@@ -189,15 +178,17 @@ static bool fySpiffsReady = false;
 // ============================================================================
 
 static void fyBeep(int freq, int dur) {
-    if (!fyBuzzerOn) return;
+    if (!fyBuzzerOn)
+        return;
     tone(BUZZER_PIN, freq, dur);
     delay(dur + 50);
 }
 
 // Crow caw: harsh descending sweep with warble texture
 static void fyCaw(int startFreq, int endFreq, int durationMs, int warbleHz) {
-    if (!fyBuzzerOn) return;
-    int steps = durationMs / 8;  // 8ms per step
+    if (!fyBuzzerOn)
+        return;
+    int steps = durationMs / 8; // 8ms per step
     float fStep = (float)(endFreq - startFreq) / steps;
     for (int i = 0; i < steps; i++) {
         int f = startFreq + (int)(fStep * i);
@@ -205,7 +196,8 @@ static void fyCaw(int startFreq, int endFreq, int durationMs, int warbleHz) {
         if (warbleHz > 0 && (i % 3 == 0)) {
             f += ((i % 6 < 3) ? warbleHz : -warbleHz);
         }
-        if (f < 100) f = 100;
+        if (f < 100)
+            f = 100;
         tone(BUZZER_PIN, f, 10);
         delay(8);
     }
@@ -214,7 +206,8 @@ static void fyCaw(int startFreq, int endFreq, int durationMs, int warbleHz) {
 
 static void fyBootBeep() {
     printf("[FLOCK-YOU] Boot sound (buzzer %s)\n", fyBuzzerOn ? "ON" : "OFF");
-    if (!fyBuzzerOn) return;
+    if (!fyBuzzerOn)
+        return;
 
     // === CROW CALL SEQUENCE ===
     // Caw 1: sharp descending caw
@@ -230,8 +223,10 @@ static void fyBootBeep() {
     delay(80);
 
     // Quick staccato ending "kk-kk"
-    tone(BUZZER_PIN, 600, 25); delay(40);
-    tone(BUZZER_PIN, 550, 25); delay(40);
+    tone(BUZZER_PIN, 600, 25);
+    delay(40);
+    tone(BUZZER_PIN, 550, 25);
+    delay(40);
     noTone(BUZZER_PIN);
 
     printf("[FLOCK-YOU] *caw caw caw*\n");
@@ -241,17 +236,19 @@ static void fyDetectBeep() {
     printf("[FLOCK-YOU] Detection alert!\n");
     fyPixelAlertMode = true;
     fyPixelAlertStart = millis();
-    if (!fyBuzzerOn) return;
+    if (!fyBuzzerOn)
+        return;
     // Alarm crow: two sharp ascending chirps then a caw
-    fyCaw(400, 900, 100, 30);   // rising alarm chirp
+    fyCaw(400, 900, 100, 30); // rising alarm chirp
     delay(60);
-    fyCaw(450, 950, 100, 30);   // second chirp, higher
+    fyCaw(450, 950, 100, 30); // second chirp, higher
     delay(60);
-    fyCaw(900, 350, 200, 50);   // descending caw
+    fyCaw(900, 350, 200, 50); // descending caw
 }
 
 static void fyHeartbeat() {
-    if (!fyBuzzerOn) return;
+    if (!fyBuzzerOn)
+        return;
     // Soft double coo - like a distant crow
     fyCaw(500, 400, 80, 20);
     delay(120);
@@ -273,12 +270,36 @@ static uint32_t fyHsvToRgb(uint16_t h, uint8_t s, uint8_t v) {
         uint8_t q = (v * (255 - ((s * remainder) >> 8))) >> 8;
         uint8_t t = (v * (255 - ((s * (255 - remainder)) >> 8))) >> 8;
         switch (region) {
-            case 0: r = v; g = t; b = p; break;
-            case 1: r = q; g = v; b = p; break;
-            case 2: r = p; g = v; b = t; break;
-            case 3: r = p; g = q; b = v; break;
-            case 4: r = t; g = p; b = v; break;
-            default: r = v; g = p; b = q; break;
+        case 0:
+            r = v;
+            g = t;
+            b = p;
+            break;
+        case 1:
+            r = q;
+            g = v;
+            b = p;
+            break;
+        case 2:
+            r = p;
+            g = v;
+            b = t;
+            break;
+        case 3:
+            r = p;
+            g = q;
+            b = v;
+            break;
+        case 4:
+            r = t;
+            g = p;
+            b = v;
+            break;
+        default:
+            r = v;
+            g = p;
+            b = q;
+            break;
         }
     }
     return fyPixel.Color(r, g, b);
@@ -289,14 +310,21 @@ static void fyPixelBreathing() {
     static unsigned long lastUpdate = 0;
     static float brightness = 0.0;
     static bool increasing = true;
-    if (millis() - lastUpdate < 20) return;
+    if (millis() - lastUpdate < 20)
+        return;
     lastUpdate = millis();
     if (increasing) {
         brightness += 0.02;
-        if (brightness >= 1.0) { brightness = 1.0; increasing = false; }
+        if (brightness >= 1.0) {
+            brightness = 1.0;
+            increasing = false;
+        }
     } else {
         brightness -= 0.02;
-        if (brightness <= 0.1) { brightness = 0.1; increasing = true; }
+        if (brightness <= 0.1) {
+            brightness = 0.1;
+            increasing = true;
+        }
     }
     uint32_t color = fyHsvToRgb(270, 255, (uint8_t)(FY_NEOPIXEL_BRIGHTNESS * brightness));
     fyPixel.setPixelColor(0, color);
@@ -342,23 +370,27 @@ static void fyUpdatePixel() {
 static bool checkMACPrefix(const uint8_t* mac) {
     char mac_str[9];
     snprintf(mac_str, sizeof(mac_str), "%02x:%02x:%02x", mac[0], mac[1], mac[2]);
-    for (size_t i = 0; i < sizeof(mac_prefixes)/sizeof(mac_prefixes[0]); i++) {
-        if (strncasecmp(mac_str, mac_prefixes[i], 8) == 0) return true;
+    for (size_t i = 0; i < sizeof(mac_prefixes) / sizeof(mac_prefixes[0]); i++) {
+        if (strncasecmp(mac_str, mac_prefixes[i], 8) == 0)
+            return true;
     }
     return false;
 }
 
 static bool checkDeviceName(const char* name) {
-    if (!name || !name[0]) return false;
-    for (size_t i = 0; i < sizeof(device_name_patterns)/sizeof(device_name_patterns[0]); i++) {
-        if (strcasestr(name, device_name_patterns[i])) return true;
+    if (!name || !name[0])
+        return false;
+    for (size_t i = 0; i < sizeof(device_name_patterns) / sizeof(device_name_patterns[0]); i++) {
+        if (strcasestr(name, device_name_patterns[i]))
+            return true;
     }
     return false;
 }
 
 static bool checkManufacturerID(uint16_t id) {
-    for (size_t i = 0; i < sizeof(ble_manufacturer_ids)/sizeof(ble_manufacturer_ids[0]); i++) {
-        if (ble_manufacturer_ids[i] == id) return true;
+    for (size_t i = 0; i < sizeof(ble_manufacturer_ids) / sizeof(ble_manufacturer_ids[0]); i++) {
+        if (ble_manufacturer_ids[i] == id)
+            return true;
     }
     return false;
 }
@@ -368,15 +400,18 @@ static bool checkManufacturerID(uint16_t id) {
 // ============================================================================
 
 static bool checkRavenUUID(NimBLEAdvertisedDevice* device, char* out_uuid = nullptr) {
-    if (!device || !device->haveServiceUUID()) return false;
+    if (!device || !device->haveServiceUUID())
+        return false;
     int count = device->getServiceUUIDCount();
-    if (count == 0) return false;
+    if (count == 0)
+        return false;
     for (int i = 0; i < count; i++) {
         NimBLEUUID svc = device->getServiceUUID(i);
         std::string str = svc.toString();
-        for (size_t j = 0; j < sizeof(raven_service_uuids)/sizeof(raven_service_uuids[0]); j++) {
+        for (size_t j = 0; j < sizeof(raven_service_uuids) / sizeof(raven_service_uuids[0]); j++) {
             if (strcasecmp(str.c_str(), raven_service_uuids[j]) == 0) {
-                if (out_uuid) strncpy(out_uuid, str.c_str(), 40);
+                if (out_uuid)
+                    strncpy(out_uuid, str.c_str(), 40);
                 return true;
             }
         }
@@ -385,18 +420,25 @@ static bool checkRavenUUID(NimBLEAdvertisedDevice* device, char* out_uuid = null
 }
 
 static const char* estimateRavenFW(NimBLEAdvertisedDevice* device) {
-    if (!device || !device->haveServiceUUID()) return "?";
+    if (!device || !device->haveServiceUUID())
+        return "?";
     bool has_new_gps = false, has_old_loc = false, has_power = false;
     int count = device->getServiceUUIDCount();
     for (int i = 0; i < count; i++) {
         std::string u = device->getServiceUUID(i).toString();
-        if (strcasecmp(u.c_str(), RAVEN_GPS_SERVICE) == 0)          has_new_gps = true;
-        if (strcasecmp(u.c_str(), RAVEN_OLD_LOCATION_SERVICE) == 0) has_old_loc = true;
-        if (strcasecmp(u.c_str(), RAVEN_POWER_SERVICE) == 0)        has_power = true;
+        if (strcasecmp(u.c_str(), RAVEN_GPS_SERVICE) == 0)
+            has_new_gps = true;
+        if (strcasecmp(u.c_str(), RAVEN_OLD_LOCATION_SERVICE) == 0)
+            has_old_loc = true;
+        if (strcasecmp(u.c_str(), RAVEN_POWER_SERVICE) == 0)
+            has_power = true;
     }
-    if (has_old_loc && !has_new_gps) return "1.1.x";
-    if (has_new_gps && !has_power)   return "1.2.x";
-    if (has_new_gps && has_power)    return "1.3.x";
+    if (has_old_loc && !has_new_gps)
+        return "1.1.x";
+    if (has_new_gps && !has_power)
+        return "1.2.x";
+    if (has_new_gps && has_power)
+        return "1.3.x";
     return "?";
 }
 
@@ -452,8 +494,8 @@ static void fyProcessHardwareGPS() {
     // Update position when valid fix is available
     if (fyGPS.location.isUpdated() && fyGPS.location.isValid()) {
         if (!fyHWGPSFix) {
-            printf("[FLOCK-YOU] First GPS fix acquired! Sats:%d Lat:%.6f Lon:%.6f\n",
-                   fyHWGPSSats, fyGPS.location.lat(), fyGPS.location.lng());
+            printf("[FLOCK-YOU] First GPS fix acquired! Sats:%d Lat:%.6f Lon:%.6f\n", fyHWGPSSats,
+                   fyGPS.location.lat(), fyGPS.location.lng());
         }
         fyHWGPSFix = true;
         fyGPSIsHardware = true;
@@ -472,10 +514,10 @@ static void fyProcessHardwareGPS() {
 // DETECTION MANAGEMENT
 // ============================================================================
 
-static int fyAddDetection(const char* mac, const char* name, int rssi,
-                          const char* method, bool isRaven = false,
-                          const char* ravenFW = "") {
-    if (!fyMutex || xSemaphoreTake(fyMutex, pdMS_TO_TICKS(100)) != pdTRUE) return -1;
+static int fyAddDetection(const char* mac, const char* name, int rssi, const char* method,
+                          bool isRaven = false, const char* ravenFW = "") {
+    if (!fyMutex || xSemaphoreTake(fyMutex, pdMS_TO_TICKS(100)) != pdTRUE)
+        return -1;
 
     // Update existing by MAC
     for (int i = 0; i < fyDetCount; i++) {
@@ -533,8 +575,8 @@ class FYBLECallbacks : public NimBLEAdvertisedDeviceCallbacks {
 
         // Safe MAC byte extraction
         unsigned int m[6];
-        sscanf(addrStr.c_str(), "%02x:%02x:%02x:%02x:%02x:%02x",
-               &m[0], &m[1], &m[2], &m[3], &m[4], &m[5]);
+        sscanf(addrStr.c_str(), "%02x:%02x:%02x:%02x:%02x:%02x", &m[0], &m[1], &m[2], &m[3], &m[4],
+               &m[5]);
         uint8_t mac[6] = {(uint8_t)m[0], (uint8_t)m[1], (uint8_t)m[2],
                           (uint8_t)m[3], (uint8_t)m[4], (uint8_t)m[5]};
 
@@ -563,8 +605,7 @@ class FYBLECallbacks : public NimBLEAdvertisedDeviceCallbacks {
             for (int i = 0; i < (int)dev->getManufacturerDataCount(); i++) {
                 std::string data = dev->getManufacturerData(i);
                 if (data.size() >= 2) {
-                    uint16_t code = ((uint16_t)(uint8_t)data[1] << 8) |
-                                     (uint16_t)(uint8_t)data[0];
+                    uint16_t code = ((uint16_t)(uint8_t)data[1] << 8) | (uint16_t)(uint8_t)data[0];
                     if (checkManufacturerID(code)) {
                         detected = true;
                         method = "ble_mfr_id";
@@ -586,21 +627,19 @@ class FYBLECallbacks : public NimBLEAdvertisedDeviceCallbacks {
         }
 
         if (detected) {
-            int idx = fyAddDetection(addrStr.c_str(), name.c_str(), rssi,
-                                     method, isRaven, ravenFW);
+            int idx = fyAddDetection(addrStr.c_str(), name.c_str(), rssi, method, isRaven, ravenFW);
 
             // Human-readable log
-            printf("[FLOCK-YOU] DETECTED: %s %s RSSI:%d [%s] count:%d\n",
-                   addrStr.c_str(), name.c_str(), rssi, method,
-                   idx >= 0 ? fyDet[idx].count : 0);
+            printf("[FLOCK-YOU] DETECTED: %s %s RSSI:%d [%s] count:%d\n", addrStr.c_str(),
+                   name.c_str(), rssi, method, idx >= 0 ? fyDet[idx].count : 0);
 
             // JSON serial output (Flask-compatible format for live ingestion)
             // Build GPS fragment if available
             char gpsBuf[80] = "";
             if (fyGPSIsFresh()) {
                 snprintf(gpsBuf, sizeof(gpsBuf),
-                    ",\"gps\":{\"latitude\":%.8f,\"longitude\":%.8f,\"accuracy\":%.1f}",
-                    fyGPSLat, fyGPSLon, fyGPSAcc);
+                         ",\"gps\":{\"latitude\":%.8f,\"longitude\":%.8f,\"accuracy\":%.1f}",
+                         fyGPSLat, fyGPSLon, fyGPSAcc);
             }
             if (isRaven) {
                 printf("{\"detection_method\":\"%s\",\"protocol\":\"bluetooth_le\","
@@ -629,22 +668,22 @@ class FYBLECallbacks : public NimBLEAdvertisedDeviceCallbacks {
 // JSON HELPER
 // ============================================================================
 
-static void writeDetectionsJSON(AsyncResponseStream *resp) {
+static void writeDetectionsJSON(AsyncResponseStream* resp) {
     resp->print("[");
     if (fyMutex && xSemaphoreTake(fyMutex, pdMS_TO_TICKS(200)) == pdTRUE) {
         for (int i = 0; i < fyDetCount; i++) {
-            if (i > 0) resp->print(",");
-            resp->printf(
-                "{\"mac\":\"%s\",\"name\":\"%s\",\"rssi\":%d,\"method\":\"%s\","
-                "\"first\":%lu,\"last\":%lu,\"count\":%d,"
-                "\"raven\":%s,\"fw\":\"%s\"",
-                fyDet[i].mac, fyDet[i].name, fyDet[i].rssi, fyDet[i].method,
-                fyDet[i].firstSeen, fyDet[i].lastSeen, fyDet[i].count,
-                fyDet[i].isRaven ? "true" : "false", fyDet[i].ravenFW);
+            if (i > 0)
+                resp->print(",");
+            resp->printf("{\"mac\":\"%s\",\"name\":\"%s\",\"rssi\":%d,\"method\":\"%s\","
+                         "\"first\":%lu,\"last\":%lu,\"count\":%d,"
+                         "\"raven\":%s,\"fw\":\"%s\"",
+                         fyDet[i].mac, fyDet[i].name, fyDet[i].rssi, fyDet[i].method,
+                         fyDet[i].firstSeen, fyDet[i].lastSeen, fyDet[i].count,
+                         fyDet[i].isRaven ? "true" : "false", fyDet[i].ravenFW);
             // Append GPS if present
             if (fyDet[i].hasGPS) {
-                resp->printf(",\"gps\":{\"lat\":%.8f,\"lon\":%.8f,\"acc\":%.1f}",
-                    fyDet[i].gpsLat, fyDet[i].gpsLon, fyDet[i].gpsAcc);
+                resp->printf(",\"gps\":{\"lat\":%.8f,\"lon\":%.8f,\"acc\":%.1f}", fyDet[i].gpsLat,
+                             fyDet[i].gpsLon, fyDet[i].gpsAcc);
             }
             resp->print("}");
         }
@@ -658,24 +697,30 @@ static void writeDetectionsJSON(AsyncResponseStream *resp) {
 // ============================================================================
 
 static void fySaveSession() {
-    if (!fySpiffsReady || !fyMutex) return;
-    if (xSemaphoreTake(fyMutex, pdMS_TO_TICKS(300)) != pdTRUE) return;
+    if (!fySpiffsReady || !fyMutex)
+        return;
+    if (xSemaphoreTake(fyMutex, pdMS_TO_TICKS(300)) != pdTRUE)
+        return;
 
     File f = SPIFFS.open(FY_SESSION_FILE, "w");
-    if (!f) { xSemaphoreGive(fyMutex); return; }
+    if (!f) {
+        xSemaphoreGive(fyMutex);
+        return;
+    }
 
     f.print("[");
     for (int i = 0; i < fyDetCount; i++) {
-        if (i > 0) f.print(",");
+        if (i > 0)
+            f.print(",");
         FYDetection& d = fyDet[i];
         f.printf("{\"mac\":\"%s\",\"name\":\"%s\",\"rssi\":%d,\"method\":\"%s\","
                  "\"first\":%lu,\"last\":%lu,\"count\":%d,"
                  "\"raven\":%s,\"fw\":\"%s\"",
-                 d.mac, d.name, d.rssi, d.method,
-                 d.firstSeen, d.lastSeen, d.count,
+                 d.mac, d.name, d.rssi, d.method, d.firstSeen, d.lastSeen, d.count,
                  d.isRaven ? "true" : "false", d.ravenFW);
         if (d.hasGPS) {
-            f.printf(",\"gps\":{\"lat\":%.8f,\"lon\":%.8f,\"acc\":%.1f}", d.gpsLat, d.gpsLon, d.gpsAcc);
+            f.printf(",\"gps\":{\"lat\":%.8f,\"lon\":%.8f,\"acc\":%.1f}", d.gpsLat, d.gpsLon,
+                     d.gpsAcc);
         }
         f.print("}");
     }
@@ -689,7 +734,8 @@ static void fySaveSession() {
 static void fyPromotePrevSession() {
     // Copy current session to prev_session on boot, then delete original
     // NOTE: SPIFFS.rename() is unreliable on ESP32 — use copy+delete instead
-    if (!fySpiffsReady) return;
+    if (!fySpiffsReady)
+        return;
     if (!SPIFFS.exists(FY_SESSION_FILE)) {
         printf("[FLOCK-YOU] No prior session file to promote\n");
         return;
@@ -727,7 +773,7 @@ static void fyPromotePrevSession() {
 // KML EXPORT
 // ============================================================================
 
-static void writeDetectionsKML(AsyncResponseStream *resp) {
+static void writeDetectionsKML(AsyncResponseStream* resp) {
     resp->print("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                 "<kml xmlns=\"http://www.opengis.net/kml/2.2\">\n<Document>\n"
                 "<name>Flock-You Detections</name>\n"
@@ -742,21 +788,24 @@ static void writeDetectionsKML(AsyncResponseStream *resp) {
     if (fyMutex && xSemaphoreTake(fyMutex, pdMS_TO_TICKS(300)) == pdTRUE) {
         for (int i = 0; i < fyDetCount; i++) {
             FYDetection& d = fyDet[i];
-            if (!d.hasGPS) continue;  // Skip detections without GPS
+            if (!d.hasGPS)
+                continue; // Skip detections without GPS
             resp->print("<Placemark>\n");
             resp->printf("<name>%s</name>\n", d.mac);
             resp->printf("<styleUrl>#%s</styleUrl>\n", d.isRaven ? "raven" : "det");
             resp->print("<description><![CDATA[");
-            if (d.name[0]) resp->printf("<b>Name:</b> %s<br/>", d.name);
+            if (d.name[0])
+                resp->printf("<b>Name:</b> %s<br/>", d.name);
             resp->printf("<b>Method:</b> %s<br/>"
                          "<b>RSSI:</b> %d dBm<br/>"
                          "<b>Count:</b> %d<br/>",
                          d.method, d.rssi, d.count);
-            if (d.isRaven) resp->printf("<b>Raven FW:</b> %s<br/>", d.ravenFW);
+            if (d.isRaven)
+                resp->printf("<b>Raven FW:</b> %s<br/>", d.ravenFW);
             resp->printf("<b>Accuracy:</b> %.1f m", d.gpsAcc);
             resp->print("]]></description>\n");
-            resp->printf("<Point><coordinates>%.8f,%.8f,0</coordinates></Point>\n",
-                         d.gpsLon, d.gpsLat);
+            resp->printf("<Point><coordinates>%.8f,%.8f,0</coordinates></Point>\n", d.gpsLon,
+                         d.gpsLat);
             resp->print("</Placemark>\n");
         }
         xSemaphoreGive(fyMutex);
@@ -886,48 +935,49 @@ refresh();setInterval(refresh,2500);
 
 static void fySetupServer() {
     // Dashboard
-    fyServer.on("/", HTTP_GET, [](AsyncWebServerRequest *r) {
-        r->send(200, "text/html", FY_HTML);
-    });
+    fyServer.on("/", HTTP_GET,
+                [](AsyncWebServerRequest* r) { r->send(200, "text/html", FY_HTML); });
 
     // API: Detection list
-    fyServer.on("/api/detections", HTTP_GET, [](AsyncWebServerRequest *r) {
-        AsyncResponseStream *resp = r->beginResponseStream("application/json");
+    fyServer.on("/api/detections", HTTP_GET, [](AsyncWebServerRequest* r) {
+        AsyncResponseStream* resp = r->beginResponseStream("application/json");
         writeDetectionsJSON(resp);
         r->send(resp);
     });
 
     // API: Stats (includes GPS status)
-    fyServer.on("/api/stats", HTTP_GET, [](AsyncWebServerRequest *r) {
+    fyServer.on("/api/stats", HTTP_GET, [](AsyncWebServerRequest* r) {
         int raven = 0, withGPS = 0;
         if (fyMutex && xSemaphoreTake(fyMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
             for (int i = 0; i < fyDetCount; i++) {
-                if (fyDet[i].isRaven) raven++;
-                if (fyDet[i].hasGPS) withGPS++;
+                if (fyDet[i].isRaven)
+                    raven++;
+                if (fyDet[i].hasGPS)
+                    withGPS++;
             }
             xSemaphoreGive(fyMutex);
         }
         const char* gpsSrc = "none";
-        if (fyGPSIsHardware && fyHWGPSFix) gpsSrc = "hw";
-        else if (fyGPSIsFresh()) gpsSrc = "phone";
+        if (fyGPSIsHardware && fyHWGPSFix)
+            gpsSrc = "hw";
+        else if (fyGPSIsFresh())
+            gpsSrc = "phone";
         char buf[320];
         snprintf(buf, sizeof(buf),
-            "{\"total\":%d,\"raven\":%d,\"ble\":\"active\","
-            "\"gps_valid\":%s,\"gps_age\":%lu,\"gps_tagged\":%d,"
-            "\"gps_src\":\"%s\",\"gps_sats\":%d,\"gps_hw_detected\":%s}",
-            fyDetCount, raven,
-            fyGPSIsFresh() ? "true" : "false",
-            fyGPSValid ? (millis() - fyGPSLastUpdate) : 0UL,
-            withGPS,
-            gpsSrc, fyHWGPSSats,
-            fyHWGPSDetected ? "true" : "false");
+                 "{\"total\":%d,\"raven\":%d,\"ble\":\"active\","
+                 "\"gps_valid\":%s,\"gps_age\":%lu,\"gps_tagged\":%d,"
+                 "\"gps_src\":\"%s\",\"gps_sats\":%d,\"gps_hw_detected\":%s}",
+                 fyDetCount, raven, fyGPSIsFresh() ? "true" : "false",
+                 fyGPSValid ? (millis() - fyGPSLastUpdate) : 0UL, withGPS, gpsSrc, fyHWGPSSats,
+                 fyHWGPSDetected ? "true" : "false");
         r->send(200, "application/json", buf);
     });
 
     // API: Receive GPS from phone browser (ignored when hardware GPS has fix)
-    fyServer.on("/api/gps", HTTP_GET, [](AsyncWebServerRequest *r) {
+    fyServer.on("/api/gps", HTTP_GET, [](AsyncWebServerRequest* r) {
         if (fyHWGPSFix) {
-            r->send(200, "application/json", "{\"status\":\"ignored\",\"reason\":\"hw_gps_active\"}");
+            r->send(200, "application/json",
+                    "{\"status\":\"ignored\",\"reason\":\"hw_gps_active\"}");
             return;
         }
         if (r->hasParam("lat") && r->hasParam("lon")) {
@@ -944,26 +994,32 @@ static void fySetupServer() {
     });
 
     // API: Pattern database
-    fyServer.on("/api/patterns", HTTP_GET, [](AsyncWebServerRequest *r) {
-        AsyncResponseStream *resp = r->beginResponseStream("application/json");
+    fyServer.on("/api/patterns", HTTP_GET, [](AsyncWebServerRequest* r) {
+        AsyncResponseStream* resp = r->beginResponseStream("application/json");
         resp->print("{\"macs\":[");
-        for (size_t i = 0; i < sizeof(mac_prefixes)/sizeof(mac_prefixes[0]); i++) {
-            if (i > 0) resp->print(",");
+        for (size_t i = 0; i < sizeof(mac_prefixes) / sizeof(mac_prefixes[0]); i++) {
+            if (i > 0)
+                resp->print(",");
             resp->printf("\"%s\"", mac_prefixes[i]);
         }
         resp->print("],\"names\":[");
-        for (size_t i = 0; i < sizeof(device_name_patterns)/sizeof(device_name_patterns[0]); i++) {
-            if (i > 0) resp->print(",");
+        for (size_t i = 0; i < sizeof(device_name_patterns) / sizeof(device_name_patterns[0]);
+             i++) {
+            if (i > 0)
+                resp->print(",");
             resp->printf("\"%s\"", device_name_patterns[i]);
         }
         resp->print("],\"mfr\":[");
-        for (size_t i = 0; i < sizeof(ble_manufacturer_ids)/sizeof(ble_manufacturer_ids[0]); i++) {
-            if (i > 0) resp->print(",");
+        for (size_t i = 0; i < sizeof(ble_manufacturer_ids) / sizeof(ble_manufacturer_ids[0]);
+             i++) {
+            if (i > 0)
+                resp->print(",");
             resp->printf("%u", ble_manufacturer_ids[i]);
         }
         resp->print("],\"raven\":[");
-        for (size_t i = 0; i < sizeof(raven_service_uuids)/sizeof(raven_service_uuids[0]); i++) {
-            if (i > 0) resp->print(",");
+        for (size_t i = 0; i < sizeof(raven_service_uuids) / sizeof(raven_service_uuids[0]); i++) {
+            if (i > 0)
+                resp->print(",");
             resp->printf("\"%s\"", raven_service_uuids[i]);
         }
         resp->print("]}");
@@ -971,32 +1027,31 @@ static void fySetupServer() {
     });
 
     // API: Export JSON (downloadable file)
-    fyServer.on("/api/export/json", HTTP_GET, [](AsyncWebServerRequest *r) {
-        AsyncResponseStream *resp = r->beginResponseStream("application/json");
+    fyServer.on("/api/export/json", HTTP_GET, [](AsyncWebServerRequest* r) {
+        AsyncResponseStream* resp = r->beginResponseStream("application/json");
         resp->addHeader("Content-Disposition", "attachment; filename=\"flockyou_detections.json\"");
         writeDetectionsJSON(resp);
         r->send(resp);
     });
 
     // API: Export CSV (downloadable file, includes GPS)
-    fyServer.on("/api/export/csv", HTTP_GET, [](AsyncWebServerRequest *r) {
-        AsyncResponseStream *resp = r->beginResponseStream("text/csv");
+    fyServer.on("/api/export/csv", HTTP_GET, [](AsyncWebServerRequest* r) {
+        AsyncResponseStream* resp = r->beginResponseStream("text/csv");
         resp->addHeader("Content-Disposition", "attachment; filename=\"flockyou_detections.csv\"");
-        resp->println("mac,name,rssi,method,first_seen_ms,last_seen_ms,count,is_raven,raven_fw,latitude,longitude,gps_accuracy");
+        resp->println("mac,name,rssi,method,first_seen_ms,last_seen_ms,count,is_raven,raven_fw,"
+                      "latitude,longitude,gps_accuracy");
         if (fyMutex && xSemaphoreTake(fyMutex, pdMS_TO_TICKS(200)) == pdTRUE) {
             for (int i = 0; i < fyDetCount; i++) {
                 FYDetection& d = fyDet[i];
                 if (d.hasGPS) {
                     resp->printf("\"%s\",\"%s\",%d,\"%s\",%lu,%lu,%d,%s,\"%s\",%.8f,%.8f,%.1f\n",
-                        d.mac, d.name, d.rssi, d.method,
-                        d.firstSeen, d.lastSeen, d.count,
-                        d.isRaven ? "true" : "false", d.ravenFW,
-                        d.gpsLat, d.gpsLon, d.gpsAcc);
+                                 d.mac, d.name, d.rssi, d.method, d.firstSeen, d.lastSeen, d.count,
+                                 d.isRaven ? "true" : "false", d.ravenFW, d.gpsLat, d.gpsLon,
+                                 d.gpsAcc);
                 } else {
-                    resp->printf("\"%s\",\"%s\",%d,\"%s\",%lu,%lu,%d,%s,\"%s\",,,\n",
-                        d.mac, d.name, d.rssi, d.method,
-                        d.firstSeen, d.lastSeen, d.count,
-                        d.isRaven ? "true" : "false", d.ravenFW);
+                    resp->printf("\"%s\",\"%s\",%d,\"%s\",%lu,%lu,%d,%s,\"%s\",,,\n", d.mac, d.name,
+                                 d.rssi, d.method, d.firstSeen, d.lastSeen, d.count,
+                                 d.isRaven ? "true" : "false", d.ravenFW);
                 }
             }
             xSemaphoreGive(fyMutex);
@@ -1005,15 +1060,15 @@ static void fySetupServer() {
     });
 
     // API: Export KML (GPS-tagged detections for Google Earth)
-    fyServer.on("/api/export/kml", HTTP_GET, [](AsyncWebServerRequest *r) {
-        AsyncResponseStream *resp = r->beginResponseStream("application/vnd.google-earth.kml+xml");
+    fyServer.on("/api/export/kml", HTTP_GET, [](AsyncWebServerRequest* r) {
+        AsyncResponseStream* resp = r->beginResponseStream("application/vnd.google-earth.kml+xml");
         resp->addHeader("Content-Disposition", "attachment; filename=\"flockyou_detections.kml\"");
         writeDetectionsKML(resp);
         r->send(resp);
     });
 
     // API: Prior session history (JSON)
-    fyServer.on("/api/history", HTTP_GET, [](AsyncWebServerRequest *r) {
+    fyServer.on("/api/history", HTTP_GET, [](AsyncWebServerRequest* r) {
         if (fySpiffsReady && SPIFFS.exists(FY_PREV_FILE)) {
             r->send(SPIFFS, FY_PREV_FILE, "application/json");
         } else {
@@ -1022,10 +1077,12 @@ static void fySetupServer() {
     });
 
     // API: Download prior session as JSON file
-    fyServer.on("/api/history/json", HTTP_GET, [](AsyncWebServerRequest *r) {
+    fyServer.on("/api/history/json", HTTP_GET, [](AsyncWebServerRequest* r) {
         if (fySpiffsReady && SPIFFS.exists(FY_PREV_FILE)) {
-            AsyncWebServerResponse *resp = r->beginResponse(SPIFFS, FY_PREV_FILE, "application/json");
-            resp->addHeader("Content-Disposition", "attachment; filename=\"flockyou_prev_session.json\"");
+            AsyncWebServerResponse* resp =
+                r->beginResponse(SPIFFS, FY_PREV_FILE, "application/json");
+            resp->addHeader("Content-Disposition",
+                            "attachment; filename=\"flockyou_prev_session.json\"");
             r->send(resp);
         } else {
             r->send(404, "application/json", "{\"error\":\"no prior session\"}");
@@ -1033,21 +1090,25 @@ static void fySetupServer() {
     });
 
     // API: Download prior session as KML (reads JSON from SPIFFS, converts)
-    fyServer.on("/api/history/kml", HTTP_GET, [](AsyncWebServerRequest *r) {
+    fyServer.on("/api/history/kml", HTTP_GET, [](AsyncWebServerRequest* r) {
         if (!fySpiffsReady || !SPIFFS.exists(FY_PREV_FILE)) {
             r->send(404, "application/json", "{\"error\":\"no prior session\"}");
             return;
         }
         File f = SPIFFS.open(FY_PREV_FILE, "r");
-        if (!f) { r->send(500, "text/plain", "read error"); return; }
+        if (!f) {
+            r->send(500, "text/plain", "read error");
+            return;
+        }
         String content = f.readString();
         f.close();
         if (content.length() == 0) {
             r->send(404, "application/json", "{\"error\":\"prior session empty\"}");
             return;
         }
-        AsyncResponseStream *resp = r->beginResponseStream("application/vnd.google-earth.kml+xml");
-        resp->addHeader("Content-Disposition", "attachment; filename=\"flockyou_prev_session.kml\"");
+        AsyncResponseStream* resp = r->beginResponseStream("application/vnd.google-earth.kml+xml");
+        resp->addHeader("Content-Disposition",
+                        "attachment; filename=\"flockyou_prev_session.kml\"");
         resp->print("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                     "<kml xmlns=\"http://www.opengis.net/kml/2.2\">\n<Document>\n"
                     "<name>Flock-You Prior Session</name>\n"
@@ -1063,7 +1124,8 @@ static void fySetupServer() {
             int placed = 0;
             for (JsonObject d : doc.as<JsonArray>()) {
                 JsonObject gps = d["gps"];
-                if (!gps || !gps.containsKey("lat")) continue;
+                if (!gps || !gps.containsKey("lat"))
+                    continue;
                 bool isRaven = d["raven"] | false;
                 resp->printf("<Placemark><name>%s</name>\n", d["mac"] | "?");
                 resp->printf("<styleUrl>#%s</styleUrl>\n", isRaven ? "raven" : "det");
@@ -1071,12 +1133,12 @@ static void fySetupServer() {
                 if (d["name"].is<const char*>() && strlen(d["name"] | "") > 0)
                     resp->printf("<b>Name:</b> %s<br/>", d["name"] | "");
                 resp->printf("<b>Method:</b> %s<br/><b>RSSI:</b> %d<br/><b>Count:</b> %d",
-                    d["method"] | "?", d["rssi"] | 0, d["count"] | 1);
+                             d["method"] | "?", d["rssi"] | 0, d["count"] | 1);
                 if (isRaven && d["fw"].is<const char*>())
                     resp->printf("<br/><b>Raven FW:</b> %s", d["fw"] | "");
                 resp->print("]]></description>\n");
                 resp->printf("<Point><coordinates>%.8f,%.8f,0</coordinates></Point>\n",
-                    (double)(gps["lon"] | 0.0), (double)(gps["lat"] | 0.0));
+                             (double)(gps["lon"] | 0.0), (double)(gps["lat"] | 0.0));
                 resp->print("</Placemark>\n");
                 placed++;
             }
@@ -1089,8 +1151,8 @@ static void fySetupServer() {
     });
 
     // API: Clear all detections (saves current session first)
-    fyServer.on("/api/clear", HTTP_GET, [](AsyncWebServerRequest *r) {
-        fySaveSession();  // Persist before clearing
+    fyServer.on("/api/clear", HTTP_GET, [](AsyncWebServerRequest* r) {
+        fySaveSession(); // Persist before clearing
         if (fyMutex && xSemaphoreTake(fyMutex, pdMS_TO_TICKS(200)) == pdTRUE) {
             fyDetCount = 0;
             memset(fyDet, 0, sizeof(fyDet));
@@ -1129,10 +1191,10 @@ void setup() {
     fyPixel.clear();
     fyPixel.show();
     // Test flash: pink -> purple
-    fyPixel.setPixelColor(0, fyPixel.Color(236, 72, 153));  // pink #ec4899
+    fyPixel.setPixelColor(0, fyPixel.Color(236, 72, 153)); // pink #ec4899
     fyPixel.show();
     delay(500);
-    fyPixel.setPixelColor(0, fyPixel.Color(139, 92, 246));  // purple #8b5cf6
+    fyPixel.setPixelColor(0, fyPixel.Color(139, 92, 246)); // purple #8b5cf6
     fyPixel.show();
     delay(500);
     fyPixel.clear();

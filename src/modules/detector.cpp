@@ -1,10 +1,10 @@
 #include "detector.h"
 #include "../hal/buzzer.h"
-#include "../hal/neopixel.h"
 #include "../hal/led.h"
+#include "../hal/neopixel.h"
 #include <Preferences.h>
-#include <vector>
 #include <algorithm>
+#include <vector>
 
 // ============================================================================
 // Detector Module: BLE device scanning with OUI/MAC watchlists
@@ -64,11 +64,17 @@ static void detNormMAC(String& mac) {
 static bool detIsValidMAC(const String& mac) {
     String n = mac;
     detNormMAC(n);
-    if (n.length() != 8 && n.length() != 17) return false;
+    if (n.length() != 8 && n.length() != 17)
+        return false;
     for (int i = 0; i < (int)n.length(); i++) {
         char c = n.charAt(i);
-        if (i % 3 == 2) { if (c != ':') return false; }
-        else { if (!isxdigit(c)) return false; }
+        if (i % 3 == 2) {
+            if (c != ':')
+                return false;
+        } else {
+            if (!isxdigit(c))
+                return false;
+        }
     }
     return true;
 }
@@ -80,9 +86,15 @@ static bool detMatchesFilter(const String& deviceMAC, String& matchedDesc) {
         String fid = f.identifier;
         detNormMAC(fid);
         if (f.isFullMAC) {
-            if (norm.equals(fid)) { matchedDesc = f.description; return true; }
+            if (norm.equals(fid)) {
+                matchedDesc = f.description;
+                return true;
+            }
         } else {
-            if (norm.startsWith(fid)) { matchedDesc = f.description; return true; }
+            if (norm.startsWith(fid)) {
+                matchedDesc = f.description;
+                return true;
+            }
         }
     }
     return false;
@@ -118,7 +130,8 @@ static void detLoadFilters() {
         f.identifier = p.getString(("id_" + String(i)).c_str(), "");
         f.isFullMAC = p.getBool(("mac_" + String(i)).c_str(), false);
         f.description = p.getString(("desc_" + String(i)).c_str(), "");
-        if (f.identifier.length() > 0) detFilters.push_back(f);
+        if (f.identifier.length() > 0)
+            detFilters.push_back(f);
     }
     p.end();
 }
@@ -143,7 +156,8 @@ static void detLoadAliases() {
         DetDeviceAlias a;
         a.macAddress = p.getString(("alias_mac_" + String(i)).c_str(), "");
         a.alias = p.getString(("alias_name_" + String(i)).c_str(), "");
-        if (a.macAddress.length() > 0 && a.alias.length() > 0) detAliases.push_back(a);
+        if (a.macAddress.length() > 0 && a.alias.length() > 0)
+            detAliases.push_back(a);
     }
     p.end();
 }
@@ -154,7 +168,8 @@ static String detGetAlias(const String& mac) {
     for (const auto& a : detAliases) {
         String n = a.macAddress;
         detNormMAC(n);
-        if (n.equals(norm)) return a.alias;
+        if (n.equals(norm))
+            return a.alias;
     }
     return "";
 }
@@ -162,25 +177,27 @@ static String detGetAlias(const String& mac) {
 static void detSetAlias(const String& mac, const String& alias) {
     String norm = mac;
     detNormMAC(norm);
+    if (alias.length() == 0) {
+        detAliases.erase(std::remove_if(detAliases.begin(), detAliases.end(),
+                                        [&](const DetDeviceAlias& da) {
+                                            String nm = da.macAddress;
+                                            detNormMAC(nm);
+                                            return nm.equals(norm);
+                                        }),
+                         detAliases.end());
+        return;
+    }
+
     for (auto& a : detAliases) {
         String n = a.macAddress;
         detNormMAC(n);
         if (n.equals(norm)) {
-            if (alias.length() == 0) {
-                detAliases.erase(std::remove_if(detAliases.begin(), detAliases.end(),
-                    [&](const DetDeviceAlias& da) {
-                        String nm = da.macAddress; detNormMAC(nm);
-                        return nm.equals(norm);
-                    }), detAliases.end());
-            } else {
-                a.alias = alias;
-            }
+            a.alias = alias;
             return;
         }
     }
-    if (alias.length() > 0) {
-        detAliases.push_back({norm, alias});
-    }
+
+    detAliases.push_back({norm, alias});
 }
 
 static void detSaveDevices() {
@@ -211,7 +228,8 @@ static void detLoadDevices() {
         d.firstSeen = d.lastSeen;
         d.inCooldown = false;
         d.cooldownUntil = 0;
-        if (d.macAddress.length() > 0) detDevices.push_back(d);
+        if (d.macAddress.length() > 0)
+            detDevices.push_back(d);
     }
     p.end();
 }
@@ -224,17 +242,19 @@ void DetectorModule::setup() {
     detLoadFilters();
     detLoadAliases();
     detLoadDevices();
-    Serial.printf("[DETECTOR] Loaded %d filters, %d aliases, %d devices\n",
-                  (int)detFilters.size(), (int)detAliases.size(), (int)detDevices.size());
+    Serial.printf("[DETECTOR] Loaded %d filters, %d aliases, %d devices\n", (int)detFilters.size(),
+                  (int)detAliases.size(), (int)detDevices.size());
 }
 
 void DetectorModule::loop() {
-    if (!_enabled) return;
+    if (!_enabled)
+        return;
 
     // Output JSON for new matches
     if (detNewMatch) {
         String alias = detGetAlias(detMatchMAC);
-        Serial.printf("{\"module\":\"detector\",\"mac\":\"%s\",\"alias\":\"%s\",\"rssi\":%d,\"type\":\"%s\"}\n",
+        Serial.printf("{\"module\":\"detector\",\"mac\":\"%s\",\"alias\":\"%s\",\"rssi\":%d,"
+                      "\"type\":\"%s\"}\n",
                       detMatchMAC.c_str(), alias.c_str(), detMatchRSSI, detMatchType.c_str());
         detNewMatch = false;
     }
@@ -247,34 +267,43 @@ void DetectorModule::loop() {
 }
 
 void DetectorModule::onBLEAdvertisement(NimBLEAdvertisedDevice* device) {
-    if (!_enabled) return;
-    if (detFilters.empty()) return;
+    if (!_enabled)
+        return;
+    if (detFilters.empty())
+        return;
 
     String mac = device->getAddress().toString().c_str();
     int rssi = device->getRSSI();
     unsigned long now = millis();
 
     String matchedDesc;
-    if (!detMatchesFilter(mac, matchedDesc)) return;
+    if (!detMatchesFilter(mac, matchedDesc))
+        return;
 
     // Check existing devices
     for (auto& dev : detDevices) {
         if (dev.macAddress == mac) {
-            if (dev.inCooldown && now < dev.cooldownUntil) return;
-            if (dev.inCooldown && now >= dev.cooldownUntil) dev.inCooldown = false;
+            if (dev.inCooldown && now < dev.cooldownUntil)
+                return;
+            if (dev.inCooldown && now >= dev.cooldownUntil)
+                dev.inCooldown = false;
 
             unsigned long sinceLast = now - dev.lastSeen;
             if (sinceLast >= 30000) {
-                detMatchMAC = mac; detMatchRSSI = rssi;
-                detMatchFilter = matchedDesc; detMatchType = "RE-30s";
+                detMatchMAC = mac;
+                detMatchRSSI = rssi;
+                detMatchFilter = matchedDesc;
+                detMatchType = "RE-30s";
                 detNewMatch = true;
                 hal::buzzerPlay(hal::SND_THREE_BEEPS);
                 hal::neopixelFlash(240, 300, 270);
                 dev.inCooldown = true;
                 dev.cooldownUntil = now + 10000;
             } else if (sinceLast >= 3000) {
-                detMatchMAC = mac; detMatchRSSI = rssi;
-                detMatchFilter = matchedDesc; detMatchType = "RE-3s";
+                detMatchMAC = mac;
+                detMatchRSSI = rssi;
+                detMatchFilter = matchedDesc;
+                detMatchType = "RE-3s";
                 detNewMatch = true;
                 hal::buzzerPlay(hal::SND_TWO_BEEPS);
                 hal::neopixelFlash(240, 300, 270);
@@ -298,8 +327,10 @@ void DetectorModule::onBLEAdvertisement(NimBLEAdvertisedDevice* device) {
     newDev.filterDescription = matchedDesc;
     detDevices.push_back(newDev);
 
-    detMatchMAC = mac; detMatchRSSI = rssi;
-    detMatchFilter = matchedDesc; detMatchType = "NEW";
+    detMatchMAC = mac;
+    detMatchRSSI = rssi;
+    detMatchFilter = matchedDesc;
+    detMatchType = "NEW";
     detNewMatch = true;
     hal::buzzerPlay(hal::SND_THREE_BEEPS);
     hal::neopixelFlash(240, 300, 270);
@@ -319,9 +350,16 @@ static void detParseFilters(AsyncWebServerRequest* request) {
             int start = 0, end = data.indexOf('\n');
             while (start < (int)data.length()) {
                 String line;
-                if (end == -1) { line = data.substring(start); start = data.length(); }
-                else { line = data.substring(start, end); start = end + 1; end = data.indexOf('\n', start); }
-                line.trim(); line.replace("\r", "");
+                if (end == -1) {
+                    line = data.substring(start);
+                    start = data.length();
+                } else {
+                    line = data.substring(start, end);
+                    start = end + 1;
+                    end = data.indexOf('\n', start);
+                }
+                line.trim();
+                line.replace("\r", "");
                 if (line.length() > 0 && detIsValidMAC(line)) {
                     detFilters.push_back({line, false, "OUI: " + line});
                 }
@@ -336,9 +374,16 @@ static void detParseFilters(AsyncWebServerRequest* request) {
             int start = 0, end = data.indexOf('\n');
             while (start < (int)data.length()) {
                 String line;
-                if (end == -1) { line = data.substring(start); start = data.length(); }
-                else { line = data.substring(start, end); start = end + 1; end = data.indexOf('\n', start); }
-                line.trim(); line.replace("\r", "");
+                if (end == -1) {
+                    line = data.substring(start);
+                    start = data.length();
+                } else {
+                    line = data.substring(start, end);
+                    start = end + 1;
+                    end = data.indexOf('\n', start);
+                }
+                line.trim();
+                line.replace("\r", "");
                 if (line.length() > 0 && detIsValidMAC(line)) {
                     detFilters.push_back({line, true, "MAC: " + line});
                 }
@@ -352,10 +397,11 @@ void DetectorModule::registerRoutes(AsyncWebServer& server) {
     server.on("/api/detector/filters", HTTP_GET, [](AsyncWebServerRequest* r) {
         String json = "[";
         for (int i = 0; i < (int)detFilters.size(); i++) {
-            if (i > 0) json += ",";
-            json += "{\"id\":\"" + detFilters[i].identifier + "\",\"full\":" +
-                    (detFilters[i].isFullMAC ? "true" : "false") +
-                    ",\"desc\":\"" + detFilters[i].description + "\"}";
+            if (i > 0)
+                json += ",";
+            json += "{\"id\":\"" + detFilters[i].identifier +
+                    "\",\"full\":" + (detFilters[i].isFullMAC ? "true" : "false") + ",\"desc\":\"" +
+                    detFilters[i].description + "\"}";
         }
         json += "]";
         r->send(200, "application/json", json);
@@ -376,12 +422,14 @@ void DetectorModule::registerRoutes(AsyncWebServer& server) {
         String json = "{\"devices\":[";
         unsigned long now = millis();
         for (int i = 0; i < (int)detDevices.size(); i++) {
-            if (i > 0) json += ",";
+            if (i > 0)
+                json += ",";
             String alias = detGetAlias(detDevices[i].macAddress);
             unsigned long ts = (now >= detDevices[i].lastSeen) ? (now - detDevices[i].lastSeen) : 0;
-            json += "{\"mac\":\"" + detDevices[i].macAddress + "\",\"rssi\":" + String(detDevices[i].rssi) +
-                    ",\"filter\":\"" + detDevices[i].filterDescription +
-                    "\",\"alias\":\"" + alias + "\",\"timeSince\":" + String(ts) + "}";
+            json += "{\"mac\":\"" + detDevices[i].macAddress +
+                    "\",\"rssi\":" + String(detDevices[i].rssi) + ",\"filter\":\"" +
+                    detDevices[i].filterDescription + "\",\"alias\":\"" + alias +
+                    "\",\"timeSince\":" + String(ts) + "}";
         }
         json += "]}";
         r->send(200, "application/json", json);
@@ -401,7 +449,10 @@ void DetectorModule::registerRoutes(AsyncWebServer& server) {
     // Clear device history
     server.on("/api/detector/clear-devices", HTTP_POST, [](AsyncWebServerRequest* r) {
         detDevices.clear();
-        Preferences p; p.begin("ouispy-dev", false); p.clear(); p.end();
+        Preferences p;
+        p.begin("ouispy-dev", false);
+        p.clear();
+        p.end();
         r->send(200, "application/json", "{\"success\":true}");
     });
 
@@ -415,7 +466,9 @@ void DetectorModule::registerRoutes(AsyncWebServer& server) {
     Serial.println("[DETECTOR] Web routes registered");
 }
 
-bool DetectorModule::isEnabled() { return _enabled; }
+bool DetectorModule::isEnabled() {
+    return _enabled;
+}
 void DetectorModule::setEnabled(bool enabled) {
     _enabled = enabled;
     detEnabled = enabled;

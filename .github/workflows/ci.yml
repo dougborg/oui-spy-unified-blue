@@ -11,17 +11,48 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  markdown-lint:
+  quality:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Lint Markdown
-        uses: DavidAnson/markdownlint-cli2-action@v20
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          globs: |
-            **/*.md
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install quality tooling
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run pre-commit
+        run: pre-commit run --all-files
+
+      - name: Run pytest
+        run: python -m pytest -q
+
+  native-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install PlatformIO
+        run: |
+          python -m pip install --upgrade pip
+          pip install platformio
+
+      - name: Run native C++ tests
+        run: pio test -e native
 
   build-firmware:
     runs-on: ubuntu-latest
@@ -65,3 +96,21 @@ jobs:
             .pio/build/seeed_xiao_esp32s3/firmware.bin
             .pio/build/seeed_xiao_esp32s3/firmware.elf
           if-no-files-found: error
+
+  static-analysis:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install cppcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cppcheck
+
+      - name: Run cppcheck on maintained sources
+        run: |
+          cppcheck --quiet --error-exitcode=1 \
+            --enable=warning,performance \
+            --inline-suppr --suppress=missingIncludeSystem \
+            -I src src/main.cpp src/hal src/modules src/web

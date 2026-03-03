@@ -25,6 +25,16 @@ Then run **Dev Containers: Rebuild and Reopen in Container**.
 
 Inside the container, you can use either raw PlatformIO commands (`pio ...`) or the project `Justfile` (`just build`, `just upload`, `just monitor`). `just` is preinstalled in this devcontainer image.
 
+Quality checks in-container:
+
+- `just lint`
+- `just test`
+- `just test-cpp`
+- `just analyze-cpp`
+- `just quality`
+
+`just analyze-cpp` runs `cppcheck` only against maintained source directories (`src/main.cpp`, `src/hal`, `src/modules`, `src/web`).
+
 The image also pre-installs PlatformIO packages declared in `platformio.ini` during image build for faster first-run builds.
 
 ## Recommended workflow by host OS

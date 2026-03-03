@@ -25,7 +25,8 @@ class DispatchCallbacks : public NimBLEAdvertisedDeviceCallbacks {
 static DispatchCallbacks _callbacks;
 
 void bleInit() {
-    if (_initialized) return;
+    if (_initialized)
+        return;
     NimBLEDevice::init("");
     NimBLEDevice::setPower(ESP_PWR_LVL_P9); // Max TX power
     _scan = NimBLEDevice::getScan();
@@ -43,19 +44,19 @@ void bleInit() {
 
 void bleAddListener(BLEListener* listener) {
     for (auto* l : _listeners) {
-        if (l == listener) return; // Already registered
+        if (l == listener)
+            return; // Already registered
     }
     _listeners.push_back(listener);
 }
 
 void bleRemoveListener(BLEListener* listener) {
-    _listeners.erase(
-        std::remove(_listeners.begin(), _listeners.end(), listener),
-        _listeners.end());
+    _listeners.erase(std::remove(_listeners.begin(), _listeners.end(), listener), _listeners.end());
 }
 
 void bleRequestAggressiveScan(bool aggressive) {
-    if (aggressive == _aggressive) return;
+    if (aggressive == _aggressive)
+        return;
     _aggressive = aggressive;
     if (_scan) {
         if (_aggressive) {
@@ -70,11 +71,15 @@ void bleRequestAggressiveScan(bool aggressive) {
     }
 }
 
-NimBLEScan* bleGetScan() { return _scan; }
+NimBLEScan* bleGetScan() {
+    return _scan;
+}
 
 void bleUpdate() {
-    if (!_initialized || !_scan) return;
-    if (_listeners.empty()) return;
+    if (!_initialized || !_scan)
+        return;
+    if (_listeners.empty())
+        return;
 
     unsigned long now = millis();
 

@@ -33,120 +33,132 @@ void initializeBuzzer() {
 }
 
 void singleBeep() {
-    if (!buzzerEnabled) return;
+    if (!buzzerEnabled)
+        return;
     ledcWrite(0, BUZZER_DUTY);
     delay(BEEP_DURATION);
     ledcWrite(0, 0);
 }
 
 void doubleBeep() {
-    for(int i = 0; i < 2; i++) {
+    for (int i = 0; i < 2; i++) {
         singleBeep();
-        if (i < 1) delay(BEEP_PAUSE);
+        if (i < 1)
+            delay(BEEP_PAUSE);
     }
 }
 
 void tripleBeep() {
-    for(int i = 0; i < 3; i++) {
+    for (int i = 0; i < 3; i++) {
         singleBeep();
-        if (i < 2) delay(BEEP_PAUSE);
+        if (i < 2)
+            delay(BEEP_PAUSE);
     }
 }
 
 void bootBeep() {
-    if (!buzzerEnabled) return;
+    if (!buzzerEnabled)
+        return;
     // Single beep at boot
     singleBeep();
 }
 
 void scanningBeeps() {
-    if (!buzzerEnabled) return;
+    if (!buzzerEnabled)
+        return;
     // 2 ascending beeps at scanning start
-    ledcSetup(0, 1500, 8);  // Lower tone
+    ledcSetup(0, 1500, 8); // Lower tone
     ledcWrite(0, BUZZER_DUTY);
     delay(BEEP_DURATION);
     ledcWrite(0, 0);
     delay(BEEP_PAUSE);
-    
-    ledcSetup(0, 2000, 8);  // Higher tone
+
+    ledcSetup(0, 2000, 8); // Higher tone
     ledcWrite(0, BUZZER_DUTY);
     delay(BEEP_DURATION);
     ledcWrite(0, 0);
-    
+
     // Reset to default frequency
     ledcSetup(0, BUZZER_FREQ, 8);
-    
+
     // Pause 2 seconds before detections can occur
     delay(2000);
 }
 
 void heartbeatBeeps() {
-    if (!buzzerEnabled) return;
+    if (!buzzerEnabled)
+        return;
     // 2 intermittent beeps like a heartbeat for device still around
     ledcWrite(0, BUZZER_DUTY);
-    delay(100);  // Short beep
+    delay(100); // Short beep
     ledcWrite(0, 0);
-    delay(100);  // Short pause
+    delay(100); // Short pause
     ledcWrite(0, BUZZER_DUTY);
-    delay(150);  // Slightly longer beep
+    delay(150); // Slightly longer beep
     ledcWrite(0, 0);
 }
 
 void ascendingBeeps() {
-    if (!buzzerEnabled) return;
+    if (!buzzerEnabled)
+        return;
     // Ready signal - 2 fast ascending beeps with close melodic notes
     ledcSetup(0, 1900, 8);
     ledcWrite(0, BUZZER_DUTY);
     delay(150);
     ledcWrite(0, 0);
     delay(50);
-    
+
     ledcSetup(0, 2200, 8);
     ledcWrite(0, BUZZER_DUTY);
     delay(150);
     ledcWrite(0, 0);
-    
+
     // Reset to normal frequency and ENSURE buzzer is OFF
     ledcSetup(0, BUZZER_FREQ, 8);
-    ledcWrite(0, 0);  // Make sure buzzer is completely off
+    ledcWrite(0, 0); // Make sure buzzer is completely off
 }
 
 void botDetectionBeeps() {
-    if (!buzzerEnabled) return;
+    if (!buzzerEnabled)
+        return;
     // 3 fast beeps for bot detection (same pattern as LED)
     for (int i = 0; i < 3; i++) {
         ledcSetup(0, 2000, 8);
         ledcWrite(0, BUZZER_DUTY);
         delay(150);
         ledcWrite(0, 0);
-        if (i < 2) delay(100);
+        if (i < 2)
+            delay(100);
     }
-    
+
     // Reset to normal frequency
     ledcSetup(0, BUZZER_FREQ, 8);
     ledcWrite(0, 0);
 }
 
 void exploitSuccessBeeps() {
-    if (!buzzerEnabled) return;
+    if (!buzzerEnabled)
+        return;
     // Success pattern: ascending triplet (indicates successful exploitation)
     int frequencies[] = {1800, 2100, 2400};
-    
+
     for (int i = 0; i < 3; i++) {
         ledcSetup(0, frequencies[i], 8);
         ledcWrite(0, BUZZER_DUTY);
         delay(200);
         ledcWrite(0, 0);
-        if (i < 2) delay(100);
+        if (i < 2)
+            delay(100);
     }
-    
+
     // Reset to normal frequency
     ledcSetup(0, BUZZER_FREQ, 8);
     ledcWrite(0, 0);
 }
 
 void exploitFailedBeeps() {
-    if (!buzzerEnabled) return;
+    if (!buzzerEnabled)
+        return;
     // Failure pattern: descending tone (indicates failed exploitation)
     ledcSetup(0, 2000, 8);
     ledcWrite(0, BUZZER_DUTY);
@@ -154,23 +166,25 @@ void exploitFailedBeeps() {
     ledcSetup(0, 1600, 8);
     delay(300);
     ledcWrite(0, 0);
-    
+
     // Reset to normal frequency
     ledcSetup(0, BUZZER_FREQ, 8);
     ledcWrite(0, 0);
 }
 
 void targetFoundBeeps() {
-    if (!buzzerEnabled) return;
+    if (!buzzerEnabled)
+        return;
     // Target discovery: three same-tone beeps
     for (int i = 0; i < 3; i++) {
         ledcSetup(0, 2000, 8);
         ledcWrite(0, BUZZER_DUTY);
         delay(150);
         ledcWrite(0, 0);
-        if (i < 2) delay(100);
+        if (i < 2)
+            delay(100);
     }
-    
+
     // Reset to normal frequency
     ledcSetup(0, BUZZER_FREQ, 8);
     ledcWrite(0, 0);
@@ -178,8 +192,8 @@ void targetFoundBeeps() {
 
 void startupBeep() {
     // Simple boot beep - same volume as foxhunter
-    ledcWrite(0, BUZZER_DUTY);  // Use proper duty cycle (127) like foxhunter
-    delay(100);                          // Same duration as foxhunter singleBeep
+    ledcWrite(0, BUZZER_DUTY); // Use proper duty cycle (127) like foxhunter
+    delay(100);                // Same duration as foxhunter singleBeep
     ledcWrite(0, 0);
 }
 
@@ -205,8 +219,8 @@ int calculateBeepInterval(int rssi) {
 
 void startProximityBeep() {
     if (buzzerEnabled && !beepActive) {
-        ledcSetup(0, 1000, 8);       // 1kHz tone
-        ledcWrite(0, BUZZER_DUTY);    // Turn on buzzer
+        ledcSetup(0, 1000, 8);     // 1kHz tone
+        ledcWrite(0, BUZZER_DUTY); // Turn on buzzer
         beepActive = true;
         beepStartTime = millis();
     }
@@ -214,21 +228,22 @@ void startProximityBeep() {
 
 void stopProximityBeep() {
     if (beepActive) {
-        ledcWrite(0, 0);              // Turn off buzzer
+        ledcWrite(0, 0); // Turn off buzzer
         beepActive = false;
     }
 }
 
 void handleProximityBeeping(int rssi) {
-    if (!buzzerEnabled) return;
-    
+    if (!buzzerEnabled)
+        return;
+
     unsigned long currentTime = millis();
-    
+
     // Handle beep duration (100ms on)
     if (beepActive && (currentTime - beepStartTime >= 100)) {
         stopProximityBeep();
     }
-    
+
     // Handle beep intervals based on RSSI
     int beepInterval = calculateBeepInterval(rssi);
     if (!beepActive && (currentTime - lastBeepTime >= beepInterval)) {
@@ -240,24 +255,24 @@ void handleProximityBeeping(int rssi) {
 #endif // ENABLE_BUZZER
 
 // ================================
-// LED Functions 
+// LED Functions
 // ================================
 #if ENABLE_LED_FEEDBACK
 
 void initializeLED() {
     pinMode(LED_PIN, OUTPUT);
-    digitalWrite(LED_PIN, HIGH);  // HIGH = OFF for XIAO ESP32-S3 (inverted logic)
+    digitalWrite(LED_PIN, HIGH); // HIGH = OFF for XIAO ESP32-S3 (inverted logic)
 }
 
 void ledOn() {
     if (ledEnabled) {
-        digitalWrite(LED_PIN, LOW);   // XIAO ESP32-S3 orange LED: LOW = ON (inverted logic)
+        digitalWrite(LED_PIN, LOW); // XIAO ESP32-S3 orange LED: LOW = ON (inverted logic)
     }
 }
 
 void ledOff() {
     if (ledEnabled) {
-        digitalWrite(LED_PIN, HIGH);  // XIAO ESP32-S3 orange LED: HIGH = OFF (inverted logic)
+        digitalWrite(LED_PIN, HIGH); // XIAO ESP32-S3 orange LED: HIGH = OFF (inverted logic)
     }
 }
 
@@ -272,7 +287,8 @@ void ledBlinkPattern(int count, int onTime = 100, int offTime = 100) {
         ledOn();
         delay(onTime);
         ledOff();
-        if (i < count - 1) delay(offTime);
+        if (i < count - 1)
+            delay(offTime);
     }
 }
 
@@ -317,16 +333,17 @@ void stopProximityLED() {
 }
 
 void handleProximityLED(int rssi) {
-    if (!ledEnabled) return;
-    
+    if (!ledEnabled)
+        return;
+
     unsigned long currentTime = millis();
     int ledInterval = calculateBeepInterval(rssi) / 2; // LED blinks twice as fast as beeps
-    
+
     // Handle LED duration (50ms on)
     if (ledActive && (currentTime - ledStartTime >= 50)) {
         stopProximityLED();
     }
-    
+
     // Handle LED intervals based on RSSI
     if (!ledActive && (currentTime - lastLEDTime >= ledInterval)) {
         startProximityLED();
@@ -342,7 +359,7 @@ void handleProximityLED(int rssi) {
 void initializeHardwareFeedback() {
 #if ENABLE_BUZZER
     initializeBuzzer();
-    delay(100);  // Give buzzer time to initialize
+    delay(100); // Give buzzer time to initialize
 #endif
 
 #if ENABLE_LED_FEEDBACK
@@ -431,7 +448,7 @@ void toggleBuzzer() {
 #if ENABLE_BUZZER
     buzzerEnabled = !buzzerEnabled;
     styledPrint("Buzzer " + String(buzzerEnabled ? "ENABLED" : "DISABLED"));
-    
+
     // Stop any active buzzing when disabled
     if (!buzzerEnabled) {
         stopProximityBeep();
@@ -440,7 +457,7 @@ void toggleBuzzer() {
         // Test beep when enabled
         singleBeep();
     }
-    
+
     // Save the setting
     saveConfiguration();
 #else
@@ -452,16 +469,16 @@ void toggleLED() {
 #if ENABLE_LED_FEEDBACK
     ledEnabled = !ledEnabled;
     styledPrint("LED feedback " + String(ledEnabled ? "ENABLED" : "DISABLED"));
-    
+
     // Turn off LED when disabled
     if (!ledEnabled) {
         stopProximityLED();
-        digitalWrite(LED_PIN, HIGH);  // HIGH = OFF (inverted logic)
+        digitalWrite(LED_PIN, HIGH); // HIGH = OFF (inverted logic)
     } else {
         // Test blink when enabled
         ledBlink(200);
     }
-    
+
     // Save the setting
     saveConfiguration();
 #else

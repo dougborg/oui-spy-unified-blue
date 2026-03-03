@@ -12,7 +12,7 @@
 namespace hal {
 
 // WiFi promiscuous frame callback type (for Sky Spy)
-using WiFiFrameCallback = void(*)(void* buf, wifi_promiscuous_pkt_type_t type);
+using WiFiFrameCallback = void (*)(void* buf, wifi_promiscuous_pkt_type_t type);
 
 void wifiInit(const String& ssid, const String& password);
 void wifiUpdate(); // Currently no-op, reserved for future use

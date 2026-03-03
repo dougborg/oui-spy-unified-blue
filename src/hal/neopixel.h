@@ -1,8 +1,8 @@
 #pragma once
 
-#include <Arduino.h>
-#include <Adafruit_NeoPixel.h>
 #include "pins.h"
+#include <Adafruit_NeoPixel.h>
+#include <Arduino.h>
 
 // ============================================================================
 // Shared NeoPixel HAL with priority-based animation states

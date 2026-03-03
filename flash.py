@@ -225,7 +225,7 @@ def batch_mode(firmware, do_erase=False):
   BATCH MODE -- flash boards one after another
   Firmware:   {os.path.basename(firmware)}  ({size_kb:.0f} KB)
   Erase:      {"YES" if do_erase else "no"}
-  
+
   Plug in a board, flash, swap, repeat.
   Press Ctrl+C when done.
 """)

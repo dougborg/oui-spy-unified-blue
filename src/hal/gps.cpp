@@ -2,10 +2,10 @@
 
 namespace hal {
 
-#define GPS_BAUD        9600
-#define GPS_STALE_MS    30000
-#define GPS_HW_TIMEOUT  5000
-#define GPS_HDOP_SCALE  5.0f
+#define GPS_BAUD 9600
+#define GPS_STALE_MS 30000
+#define GPS_HW_TIMEOUT 5000
+#define GPS_HDOP_SCALE 5.0f
 
 static TinyGPSPlus _parser;
 static HardwareSerial _serial(1);
@@ -49,15 +49,15 @@ void gpsUpdate() {
     // Update position on valid fix
     if (_parser.location.isUpdated() && _parser.location.isValid()) {
         if (!_data.hwFix) {
-            Serial.printf("[HAL] GPS fix acquired! Sats:%d Lat:%.6f Lon:%.6f\n",
-                          _data.satellites, _parser.location.lat(), _parser.location.lng());
+            Serial.printf("[HAL] GPS fix acquired! Sats:%d Lat:%.6f Lon:%.6f\n", _data.satellites,
+                          _parser.location.lat(), _parser.location.lng());
         }
         _data.hwFix = true;
         _data.isHardware = true;
         _data.lat = _parser.location.lat();
         _data.lon = _parser.location.lng();
-        _data.accuracy = _parser.hdop.isValid()
-            ? (float)(_parser.hdop.hdop() * GPS_HDOP_SCALE) : 10.0f;
+        _data.accuracy =
+            _parser.hdop.isValid() ? (float)(_parser.hdop.hdop() * GPS_HDOP_SCALE) : 10.0f;
         _data.valid = true;
         _data.lastUpdate = millis();
     } else if (_data.hwFix && _parser.location.isValid()) {
@@ -65,7 +65,9 @@ void gpsUpdate() {
     }
 }
 
-const GPSData& gpsGet() { return _data; }
+const GPSData& gpsGet() {
+    return _data;
+}
 
 bool gpsIsFresh() {
     return _data.valid && (millis() - _data.lastUpdate < GPS_STALE_MS);
@@ -73,7 +75,8 @@ bool gpsIsFresh() {
 
 void gpsSetFromPhone(double lat, double lon, float accuracy) {
     // Ignore phone GPS when hardware has a fix
-    if (_data.hwFix) return;
+    if (_data.hwFix)
+        return;
     _data.lat = lat;
     _data.lon = lon;
     _data.accuracy = accuracy;

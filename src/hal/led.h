@@ -1,7 +1,7 @@
 #pragma once
 
-#include <Arduino.h>
 #include "pins.h"
+#include <Arduino.h>
 
 // ============================================================================
 // LED Control (XIAO ESP32-S3 inverted logic: LOW=ON, HIGH=OFF)
