@@ -2,6 +2,7 @@
 #include "../hal/buzzer.h"
 #include "../hal/led.h"
 #include "../hal/neopixel.h"
+#include "detector_logic.h"
 #include <Preferences.h>
 #include <algorithm>
 #include <vector>
@@ -56,45 +57,18 @@ static unsigned long detLastSave = 0;
 // ============================================================================
 
 static void detNormMAC(String& mac) {
-    mac.toLowerCase();
-    mac.replace("-", ":");
-    mac.replace(" ", "");
+    mac = detector_logic::normalizeMac(mac.c_str()).c_str();
 }
 
 static bool detIsValidMAC(const String& mac) {
-    String n = mac;
-    detNormMAC(n);
-    if (n.length() != 8 && n.length() != 17)
-        return false;
-    for (int i = 0; i < (int)n.length(); i++) {
-        char c = n.charAt(i);
-        if (i % 3 == 2) {
-            if (c != ':')
-                return false;
-        } else {
-            if (!isxdigit(c))
-                return false;
-        }
-    }
-    return true;
+    return detector_logic::isValidMac(mac.c_str());
 }
 
 static bool detMatchesFilter(const String& deviceMAC, String& matchedDesc) {
-    String norm = deviceMAC;
-    detNormMAC(norm);
     for (const auto& f : detFilters) {
-        String fid = f.identifier;
-        detNormMAC(fid);
-        if (f.isFullMAC) {
-            if (norm.equals(fid)) {
-                matchedDesc = f.description;
-                return true;
-            }
-        } else {
-            if (norm.startsWith(fid)) {
-                matchedDesc = f.description;
-                return true;
-            }
+        if (detector_logic::matchesFilter(deviceMAC.c_str(), f.identifier.c_str(), f.isFullMAC)) {
+            matchedDesc = f.description;
+            return true;
         }
     }
     return false;

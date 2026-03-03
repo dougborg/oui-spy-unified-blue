@@ -1,4 +1,5 @@
 #include "buzzer.h"
+#include "buzzer_logic.h"
 #include "led.h"
 #include <Preferences.h>
 
@@ -301,20 +302,7 @@ static bool playCrowHeartbeat() {
 // ============================================================================
 
 static int calcProxInterval(int rssi) {
-    if (rssi >= -35)
-        return map(rssi, -35, -25, 25, 10);
-    else if (rssi >= -45)
-        return map(rssi, -45, -35, 50, 25);
-    else if (rssi >= -55)
-        return map(rssi, -55, -45, 100, 50);
-    else if (rssi >= -65)
-        return map(rssi, -65, -55, 200, 100);
-    else if (rssi >= -75)
-        return map(rssi, -75, -65, 500, 200);
-    else if (rssi >= -85)
-        return map(rssi, -85, -75, 1000, 500);
-    else
-        return 3000;
+    return buzzer_logic::calcProximityIntervalMs(rssi);
 }
 
 void buzzerSetProximity(bool enabled, int rssi) {

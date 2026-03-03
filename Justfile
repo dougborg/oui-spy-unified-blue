@@ -32,6 +32,10 @@ coverage-cpp:
     python3 -m gcovr --root . --txt --print-summary \
         --filter src/opendroneid.c \
         --filter src/wifi.c \
+        --filter src/modules/detector_logic.cpp \
+        --filter src/modules/flockyou_logic.cpp \
+        --filter src/hal/buzzer_logic.cpp \
+        --filter src/hal/neopixel_logic.cpp \
         --xml-pretty --xml coverage-native.xml
 
 lint:

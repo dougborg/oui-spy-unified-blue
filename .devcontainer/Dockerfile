@@ -23,11 +23,14 @@ USER vscode
 
 RUN python3 -m venv /home/vscode/.venv/pio \
     && /home/vscode/.venv/pio/bin/pip install --upgrade pip \
-    && /home/vscode/.venv/pio/bin/pip install platformio esptool pyserial pytest pre-commit
+    && /home/vscode/.venv/pio/bin/pip install platformio esptool pyserial
 
 ENV PATH="/home/vscode/.venv/pio/bin:/home/vscode/.local/bin:${PATH}"
 
+COPY --chown=vscode:vscode requirements-dev.txt /tmp/pio-project/requirements-dev.txt
 COPY --chown=vscode:vscode platformio.ini /tmp/pio-project/platformio.ini
+
+RUN /home/vscode/.venv/pio/bin/pip install -r /tmp/pio-project/requirements-dev.txt
 
 RUN pio pkg install -d /tmp/pio-project \
     && rm -rf /tmp/pio-project

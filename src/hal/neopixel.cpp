@@ -1,4 +1,5 @@
 #include "neopixel.h"
+#include "neopixel_logic.h"
 
 namespace hal {
 
@@ -116,19 +117,10 @@ static void updateBreathing() {
         return;
     _breatheLastUpdate = millis();
 
-    if (_breatheIncreasing) {
-        _breatheBrightness += 0.02f;
-        if (_breatheBrightness >= 1.0f) {
-            _breatheBrightness = 1.0f;
-            _breatheIncreasing = false;
-        }
-    } else {
-        _breatheBrightness -= 0.02f;
-        if (_breatheBrightness <= 0.1f) {
-            _breatheBrightness = 0.1f;
-            _breatheIncreasing = true;
-        }
-    }
+    neopixel_logic::BreathingState state{_breatheBrightness, _breatheIncreasing};
+    state = neopixel_logic::nextBreathing(state);
+    _breatheBrightness = state.brightness;
+    _breatheIncreasing = state.increasing;
 
     uint32_t color = hsvToRgb(_idleHue, 255, (uint8_t)(NEOPIXEL_BRIGHTNESS * _breatheBrightness));
     _strip.setPixelColor(0, color);
@@ -138,14 +130,13 @@ static void updateBreathing() {
 // Detection flash animation
 static void updateFlash() {
     unsigned long elapsed = millis() - _flashStart;
-    int flashIdx = elapsed / 250;
-    if (flashIdx >= 3) {
+    auto frame = neopixel_logic::computeFlashFrame(elapsed, NEOPIXEL_DETECTION_BRIGHTNESS,
+                                                   (NEOPIXEL_BRIGHTNESS / 4));
+    if (!frame.active) {
         _flashing = false;
         return;
     }
-    bool bright = ((elapsed % 250) < 150);
-    uint8_t val = bright ? NEOPIXEL_DETECTION_BRIGHTNESS : (NEOPIXEL_BRIGHTNESS / 4);
-    _strip.setPixelColor(0, hsvToRgb(_flashHues[flashIdx], 255, val));
+    _strip.setPixelColor(0, hsvToRgb(_flashHues[frame.frameIndex], 255, frame.value));
     _strip.show();
 }
 

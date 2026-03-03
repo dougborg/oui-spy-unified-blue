@@ -1,5 +1,11 @@
 #include <unity.h>
 #include <cstring>
+#include <string>
+
+#include "hal/buzzer_logic.h"
+#include "hal/neopixel_logic.h"
+#include "modules/detector_logic.h"
+#include "modules/flockyou_logic.h"
 
 extern "C" {
 #include "opendroneid.h"
@@ -114,6 +120,71 @@ void test_wifi_beacon_builder_rejects_invalid_ssid_len() {
     TEST_ASSERT_LESS_THAN_INT(0, ret);
 }
 
+void test_detector_logic_normalize_and_validate() {
+    std::string normalized = detector_logic::normalizeMac("AA-BB-CC DD:EE:FF");
+    TEST_ASSERT_EQUAL_STRING("aa:bb:ccdd:ee:ff", normalized.c_str());
+
+    TEST_ASSERT_TRUE(detector_logic::isValidMac("aa:bb:cc"));
+    TEST_ASSERT_TRUE(detector_logic::isValidMac("AA-BB-CC-DD-EE-FF"));
+    TEST_ASSERT_FALSE(detector_logic::isValidMac("not-a-mac"));
+}
+
+void test_detector_logic_filter_matching() {
+    TEST_ASSERT_TRUE(detector_logic::matchesFilter("AA:BB:CC:11:22:33", "aa:bb:cc", false));
+    TEST_ASSERT_TRUE(
+        detector_logic::matchesFilter("AA:BB:CC:11:22:33", "aa-bb-cc-11-22-33", true));
+    TEST_ASSERT_FALSE(
+        detector_logic::matchesFilter("AA:BB:CC:11:22:33", "aa:bb:dd:11:22:33", true));
+}
+
+void test_flockyou_logic_matching_helpers() {
+    const char* macPrefixes[] = {"58:8e:81", "cc:cc:cc"};
+    uint8_t mac[6] = {0x58, 0x8e, 0x81, 0x01, 0x02, 0x03};
+    TEST_ASSERT_TRUE(flockyou_logic::macMatchesPrefixes(mac, macPrefixes, 2));
+
+    const char* names[] = {"Flock", "Penguin"};
+    TEST_ASSERT_TRUE(flockyou_logic::nameMatchesPatterns("my flock camera", names, 2));
+    TEST_ASSERT_FALSE(flockyou_logic::nameMatchesPatterns("random", names, 2));
+
+    const uint16_t mfr[] = {0x09C8, 0x1234};
+    TEST_ASSERT_TRUE(flockyou_logic::manufacturerMatches(0x09C8, mfr, 2));
+    TEST_ASSERT_FALSE(flockyou_logic::manufacturerMatches(0xFFFF, mfr, 2));
+
+    const char* uuids[] = {"00003100-0000-1000-8000-00805f9b34fb"};
+    TEST_ASSERT_TRUE(flockyou_logic::uuidEqualsAny("00003100-0000-1000-8000-00805F9B34FB", uuids,
+                                                   1));
+}
+
+void test_flockyou_logic_fw_estimation() {
+    TEST_ASSERT_EQUAL_STRING("1.1.x", flockyou_logic::estimateRavenFirmware(false, true, false));
+    TEST_ASSERT_EQUAL_STRING("1.2.x", flockyou_logic::estimateRavenFirmware(true, false, false));
+    TEST_ASSERT_EQUAL_STRING("1.3.x", flockyou_logic::estimateRavenFirmware(true, false, true));
+    TEST_ASSERT_EQUAL_STRING("?", flockyou_logic::estimateRavenFirmware(false, false, false));
+}
+
+void test_buzzer_logic_proximity_interval() {
+    TEST_ASSERT_EQUAL_INT(10, hal::buzzer_logic::calcProximityIntervalMs(-25));
+    TEST_ASSERT_EQUAL_INT(200, hal::buzzer_logic::calcProximityIntervalMs(-65));
+    TEST_ASSERT_EQUAL_INT(3000, hal::buzzer_logic::calcProximityIntervalMs(-95));
+}
+
+void test_neopixel_logic_breathing_and_flash() {
+    auto up = hal::neopixel_logic::nextBreathing({0.99f, true});
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 1.0f, up.brightness);
+    TEST_ASSERT_FALSE(up.increasing);
+
+    auto down = hal::neopixel_logic::nextBreathing({0.1f, false});
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.1f, down.brightness);
+    TEST_ASSERT_TRUE(down.increasing);
+
+    auto frame = hal::neopixel_logic::computeFlashFrame(260, 200, 12);
+    TEST_ASSERT_TRUE(frame.active);
+    TEST_ASSERT_EQUAL_INT(1, frame.frameIndex);
+
+    auto done = hal::neopixel_logic::computeFlashFrame(760, 200, 12);
+    TEST_ASSERT_FALSE(done.active);
+}
+
 void test_native_arithmetic_sanity() {
     TEST_ASSERT_EQUAL_INT(4, 2 + 2);
 }
@@ -126,6 +197,12 @@ int main() {
     RUN_TEST(test_wifi_pack_build_and_process_roundtrip);
     RUN_TEST(test_wifi_nan_action_frame_roundtrip);
     RUN_TEST(test_wifi_beacon_builder_rejects_invalid_ssid_len);
+    RUN_TEST(test_detector_logic_normalize_and_validate);
+    RUN_TEST(test_detector_logic_filter_matching);
+    RUN_TEST(test_flockyou_logic_matching_helpers);
+    RUN_TEST(test_flockyou_logic_fw_estimation);
+    RUN_TEST(test_buzzer_logic_proximity_interval);
+    RUN_TEST(test_neopixel_logic_breathing_and_flash);
     RUN_TEST(test_native_arithmetic_sanity);
     return UNITY_END();
 }

@@ -2,6 +2,7 @@
 #include "../hal/buzzer.h"
 #include "../hal/gps.h"
 #include "../hal/neopixel.h"
+#include "flockyou_logic.h"
 #include <ArduinoJson.h>
 #include <LittleFS.h>
 #include <NimBLEDevice.h>
@@ -80,31 +81,18 @@ static bool fyFSReady = false;
 // ============================================================================
 
 static bool fyCheckMAC(const uint8_t* mac) {
-    char str[9];
-    snprintf(str, sizeof(str), "%02x:%02x:%02x", mac[0], mac[1], mac[2]);
-    for (size_t i = 0; i < sizeof(fyMACPrefixes) / sizeof(fyMACPrefixes[0]); i++) {
-        if (strncasecmp(str, fyMACPrefixes[i], 8) == 0)
-            return true;
-    }
-    return false;
+    return flockyou_logic::macMatchesPrefixes(mac, fyMACPrefixes,
+                                              sizeof(fyMACPrefixes) / sizeof(fyMACPrefixes[0]));
 }
 
 static bool fyCheckName(const char* name) {
-    if (!name || !name[0])
-        return false;
-    for (size_t i = 0; i < sizeof(fyNamePatterns) / sizeof(fyNamePatterns[0]); i++) {
-        if (strcasestr(name, fyNamePatterns[i]))
-            return true;
-    }
-    return false;
+    return flockyou_logic::nameMatchesPatterns(name, fyNamePatterns,
+                                               sizeof(fyNamePatterns) / sizeof(fyNamePatterns[0]));
 }
 
 static bool fyCheckMfr(uint16_t id) {
-    for (size_t i = 0; i < sizeof(fyMfrIDs) / sizeof(fyMfrIDs[0]); i++) {
-        if (fyMfrIDs[i] == id)
-            return true;
-    }
-    return false;
+    return flockyou_logic::manufacturerMatches(id, fyMfrIDs,
+                                               sizeof(fyMfrIDs) / sizeof(fyMfrIDs[0]));
 }
 
 static bool fyCheckRaven(NimBLEAdvertisedDevice* dev) {
@@ -113,10 +101,9 @@ static bool fyCheckRaven(NimBLEAdvertisedDevice* dev) {
     int count = dev->getServiceUUIDCount();
     for (int i = 0; i < count; i++) {
         std::string str = dev->getServiceUUID(i).toString();
-        for (size_t j = 0; j < sizeof(fyRavenUUIDs) / sizeof(fyRavenUUIDs[0]); j++) {
-            if (strcasecmp(str.c_str(), fyRavenUUIDs[j]) == 0)
-                return true;
-        }
+        if (flockyou_logic::uuidEqualsAny(str.c_str(), fyRavenUUIDs,
+                                          sizeof(fyRavenUUIDs) / sizeof(fyRavenUUIDs[0])))
+            return true;
     }
     return false;
 }
@@ -135,13 +122,7 @@ static const char* fyEstimateRavenFW(NimBLEAdvertisedDevice* dev) {
         if (strcasecmp(u.c_str(), RAVEN_POWER_SERVICE) == 0)
             hasPower = true;
     }
-    if (hasOldLoc && !hasNewGPS)
-        return "1.1.x";
-    if (hasNewGPS && !hasPower)
-        return "1.2.x";
-    if (hasNewGPS && hasPower)
-        return "1.3.x";
-    return "?";
+    return flockyou_logic::estimateRavenFirmware(hasNewGPS, hasOldLoc, hasPower);
 }
 
 static void fyAttachGPS(FYDetection& d) {
