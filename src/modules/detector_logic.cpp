@@ -37,7 +37,7 @@ bool isValidMac(const std::string& mac) {
 }
 
 bool matchesFilter(const std::string& deviceMac, const std::string& filterIdentifier,
-                  bool isFullMac) {
+                   bool isFullMac) {
     std::string normalizedDevice = normalizeMac(deviceMac);
     std::string normalizedFilter = normalizeMac(filterIdentifier);
 

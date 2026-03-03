@@ -174,7 +174,7 @@ void test_wifi_nan_action_frame_rejects_bad_service_info_length() {
     ODID_UAS_Data source;
     seed_basic_uas(&source, "NAN-SILEN-CHECK001");
 
-    char tx_mac[6] = {0x02, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE};
+    char tx_mac[6] = {0x02, (char)0xAA, (char)0xBB, (char)0xCC, (char)0xDD, (char)0xEE};
     uint8_t frame[1024] = {0};
     int frame_len = odid_wifi_build_message_pack_nan_action_frame(&source, tx_mac, 3, frame,
                                                                    sizeof(frame));

@@ -34,6 +34,10 @@ int clock_gettime(clockid_t, struct timespec*);
 #include <endian.h>
 #define cpu_to_be16(x) (bswap16(x))
 #define cpu_to_be32(x) (bswap32(x))
+#elif defined(__APPLE__)
+#include <libkern/OSByteOrder.h>
+#define cpu_to_be16(x) (OSSwapInt16(x))
+#define cpu_to_be32(x) (OSSwapInt32(x))
 #else
 #include <byteswap.h>
 #define cpu_to_be16(x) (bswap_16(x))

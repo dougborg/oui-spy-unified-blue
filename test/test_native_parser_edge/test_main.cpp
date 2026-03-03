@@ -18,7 +18,7 @@ static int build_valid_nan_action_frame(uint8_t* frame, size_t frame_size) {
     ODID_UAS_Data source;
     seed_basic_uas(&source, "NAN-PARSER-EDGE-01");
 
-    char tx_mac[6] = {0x02, 0x44, 0x55, 0x66, 0x77, 0x88};
+    char tx_mac[6] = {0x02, 0x44, 0x55, 0x66, 0x77, (char)0x88};
     return odid_wifi_build_message_pack_nan_action_frame(&source, tx_mac, 9, frame, frame_size);
 }
 
