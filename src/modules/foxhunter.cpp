@@ -3,7 +3,7 @@
 #include "../hal/buzzer.h"
 #include "../hal/led.h"
 #include "../hal/neopixel.h"
-#include <Preferences.h>
+#include "../storage/nvs_store.h"
 
 // ============================================================================
 // Foxhunter Module: Single-target RSSI proximity tracker
@@ -14,10 +14,7 @@
 // ============================================================================
 
 void FoxhunterModule::loadConfig() {
-    Preferences p;
-    p.begin("tracker", true);
-    _targetMAC = p.getString("targetMAC", "");
-    p.end();
+    _targetMAC = storage::getFoxTargetMAC();
     if (_targetMAC.length() > 0)
         _targetMAC.toUpperCase();
     Serial.printf("[FOXHUNTER] Target: %s\n",
@@ -25,10 +22,7 @@ void FoxhunterModule::loadConfig() {
 }
 
 void FoxhunterModule::saveConfig() {
-    Preferences p;
-    p.begin("tracker", false);
-    p.putString("targetMAC", _targetMAC);
-    p.end();
+    storage::setFoxTargetMAC(_targetMAC);
 }
 
 // ============================================================================

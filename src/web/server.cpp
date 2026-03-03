@@ -1,8 +1,8 @@
 #include "server.h"
 #include "../hal/buzzer.h"
 #include "../hal/gps.h"
+#include "../storage/nvs_store.h"
 #include "dashboard.h"
-#include <Preferences.h>
 
 namespace web {
 
@@ -62,11 +62,7 @@ void registerSystemRoutes(IDetectionModule** modules, int count) {
         for (int i = 0; i < _moduleCount; i++) {
             if (name == _modules[i]->name()) {
                 _modules[i]->setEnabled(enabled);
-                // Save to NVS
-                Preferences p;
-                p.begin("ouispy-mod", false);
-                p.putBool(name.c_str(), enabled);
-                p.end();
+                storage::setModuleEnabled(name.c_str(), enabled);
                 r->send(200, "application/json", "{\"ok\":true}");
                 return;
             }
@@ -101,10 +97,7 @@ void registerSystemRoutes(IDetectionModule** modules, int count) {
 
     // AP settings
     _server.on("/api/ap", HTTP_GET, [](AsyncWebServerRequest* r) {
-        Preferences p;
-        p.begin("ouispy-ap", true);
-        String ssid = p.getString("ssid", "oui-spy");
-        p.end();
+        String ssid = storage::getAPSSID();
         r->send(200, "application/json", "{\"ssid\":\"" + ssid + "\"}");
     });
 
@@ -113,11 +106,7 @@ void registerSystemRoutes(IDetectionModule** modules, int count) {
             String ssid = r->getParam("ssid", true)->value();
             String pass = r->hasParam("pass", true) ? r->getParam("pass", true)->value() : "";
             if (ssid.length() >= 1 && ssid.length() <= 32) {
-                Preferences p;
-                p.begin("ouispy-ap", false);
-                p.putString("ssid", ssid);
-                p.putString("pass", pass);
-                p.end();
+                storage::setAPConfig(ssid, pass);
                 r->send(200, "application/json", "{\"ok\":true,\"reboot\":true}");
                 delay(500);
                 ESP.restart();

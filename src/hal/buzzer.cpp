@@ -1,7 +1,7 @@
 #include "buzzer.h"
+#include "../storage/nvs_store.h"
 #include "buzzer_logic.h"
 #include "led.h"
-#include <Preferences.h>
 
 namespace hal {
 
@@ -47,10 +47,7 @@ void buzzerInit() {
     ledcAttachPin(BUZZER_PIN, BUZZER_LEDC_CH);
     ledcWrite(BUZZER_LEDC_CH, 0);
 
-    Preferences p;
-    p.begin("ouispy-bz", true);
-    _enabled = p.getBool("on", true);
-    p.end();
+    _enabled = storage::getBuzzerEnabled();
     Serial.printf("[HAL] Buzzer: %s\n", _enabled ? "ON" : "OFF");
 }
 
@@ -60,10 +57,7 @@ bool buzzerIsEnabled() {
 
 void buzzerSetEnabled(bool enabled) {
     _enabled = enabled;
-    Preferences p;
-    p.begin("ouispy-bz", false);
-    p.putBool("on", enabled);
-    p.end();
+    storage::setBuzzerEnabled(enabled);
     if (!enabled) {
         toneOff();
         ledOff();

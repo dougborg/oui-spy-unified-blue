@@ -48,7 +48,7 @@ analyze-cpp:
         cppcheck --quiet --error-exitcode=1 \
             --enable=warning,performance \
             --inline-suppr --suppress=missingIncludeSystem \
-            -I src src/main.cpp src/hal src/modules src/web src/opendroneid.c src/wifi.c
+            -I src src/main.cpp src/hal src/modules src/storage src/web src/opendroneid.c src/wifi.c
 
 quality:
     just lint

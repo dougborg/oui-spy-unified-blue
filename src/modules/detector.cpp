@@ -2,8 +2,8 @@
 #include "../hal/buzzer.h"
 #include "../hal/led.h"
 #include "../hal/neopixel.h"
+#include "../storage/nvs_store.h"
 #include "detector_logic.h"
-#include <Preferences.h>
 #include <algorithm>
 
 // ============================================================================
@@ -37,61 +37,50 @@ bool DetectorModule::matchesFilter(const String& deviceMAC, String& matchedDesc)
 // ============================================================================
 
 void DetectorModule::saveFilters() {
-    Preferences p;
-    p.begin("ouispy", false);
-    p.putInt("filterCount", _filters.size());
-    p.putBool("buzzerEnabled", _buzzerEnabled);
-    p.putBool("ledEnabled", _ledEnabled);
-    for (int i = 0; i < (int)_filters.size(); i++) {
-        p.putString(("id_" + String(i)).c_str(), _filters[i].identifier);
-        p.putBool(("mac_" + String(i)).c_str(), _filters[i].isFullMAC);
-        p.putString(("desc_" + String(i)).c_str(), _filters[i].description);
+    int count = (int)_filters.size();
+    std::vector<String> ids(count), descs(count);
+    bool* fullMACs = new bool[count];
+    for (int i = 0; i < count; i++) {
+        ids[i] = _filters[i].identifier;
+        fullMACs[i] = _filters[i].isFullMAC;
+        descs[i] = _filters[i].description;
     }
-    p.end();
+    storage::saveDetFilters(count, ids.data(), fullMACs, descs.data(), _buzzerEnabled, _ledEnabled);
+    delete[] fullMACs;
 }
 
 void DetectorModule::loadFilters() {
-    Preferences p;
-    p.begin("ouispy", true);
-    int count = p.getInt("filterCount", 0);
-    _buzzerEnabled = p.getBool("buzzerEnabled", true);
-    _ledEnabled = p.getBool("ledEnabled", true);
+    int count = storage::getDetFilterCount();
+    _buzzerEnabled = storage::getDetBuzzerEnabled();
+    _ledEnabled = storage::getDetLedEnabled();
     _filters.clear();
     for (int i = 0; i < count; i++) {
         DetTargetFilter f;
-        f.identifier = p.getString(("id_" + String(i)).c_str(), "");
-        f.isFullMAC = p.getBool(("mac_" + String(i)).c_str(), false);
-        f.description = p.getString(("desc_" + String(i)).c_str(), "");
+        storage::getDetFilter(i, f.identifier, f.isFullMAC, f.description);
         if (f.identifier.length() > 0)
             _filters.push_back(f);
     }
-    p.end();
 }
 
 void DetectorModule::saveAliases() {
-    Preferences p;
-    p.begin("ouispy", false);
-    p.putInt("aliasCount", _aliases.size());
-    for (int i = 0; i < (int)_aliases.size(); i++) {
-        p.putString(("alias_mac_" + String(i)).c_str(), _aliases[i].macAddress);
-        p.putString(("alias_name_" + String(i)).c_str(), _aliases[i].alias);
+    int count = (int)_aliases.size();
+    std::vector<String> macs(count), names(count);
+    for (int i = 0; i < count; i++) {
+        macs[i] = _aliases[i].macAddress;
+        names[i] = _aliases[i].alias;
     }
-    p.end();
+    storage::saveDetAliases(count, macs.data(), names.data());
 }
 
 void DetectorModule::loadAliases() {
-    Preferences p;
-    p.begin("ouispy", true);
-    int count = p.getInt("aliasCount", 0);
+    int count = storage::getDetAliasCount();
     _aliases.clear();
     for (int i = 0; i < count; i++) {
         DetDeviceAlias a;
-        a.macAddress = p.getString(("alias_mac_" + String(i)).c_str(), "");
-        a.alias = p.getString(("alias_name_" + String(i)).c_str(), "");
+        storage::getDetAlias(i, a.macAddress, a.alias);
         if (a.macAddress.length() > 0 && a.alias.length() > 0)
             _aliases.push_back(a);
     }
-    p.end();
 }
 
 String DetectorModule::getAlias(const String& mac) {
@@ -133,37 +122,31 @@ void DetectorModule::setAlias(const String& mac, const String& alias) {
 }
 
 void DetectorModule::saveDevices() {
-    Preferences p;
-    p.begin("ouispy-dev", false);
     int count = min((int)_devices.size(), 100);
-    p.putInt("count", count);
+    std::vector<String> macs(count), filters(count);
+    std::vector<int> rssis(count);
+    std::vector<unsigned long> lastSeens(count);
     for (int i = 0; i < count; i++) {
-        p.putString(("dm_" + String(i)).c_str(), _devices[i].macAddress);
-        p.putInt(("dr_" + String(i)).c_str(), _devices[i].rssi);
-        p.putULong(("dl_" + String(i)).c_str(), _devices[i].lastSeen);
-        p.putString(("df_" + String(i)).c_str(), _devices[i].filterDescription);
+        macs[i] = _devices[i].macAddress;
+        rssis[i] = _devices[i].rssi;
+        lastSeens[i] = _devices[i].lastSeen;
+        filters[i] = _devices[i].filterDescription;
     }
-    p.end();
+    storage::saveDetDevices(count, macs.data(), rssis.data(), lastSeens.data(), filters.data());
 }
 
 void DetectorModule::loadDevices() {
-    Preferences p;
-    p.begin("ouispy-dev", true);
-    int count = p.getInt("count", 0);
+    int count = storage::getDetDeviceCount();
     _devices.clear();
     for (int i = 0; i < count; i++) {
         DetDeviceInfo d;
-        d.macAddress = p.getString(("dm_" + String(i)).c_str(), "");
-        d.rssi = p.getInt(("dr_" + String(i)).c_str(), 0);
-        d.lastSeen = p.getULong(("dl_" + String(i)).c_str(), 0);
-        d.filterDescription = p.getString(("df_" + String(i)).c_str(), "");
+        storage::getDetDevice(i, d.macAddress, d.rssi, d.lastSeen, d.filterDescription);
         d.firstSeen = d.lastSeen;
         d.inCooldown = false;
         d.cooldownUntil = 0;
         if (d.macAddress.length() > 0)
             _devices.push_back(d);
     }
-    p.end();
 }
 
 // ============================================================================
@@ -381,10 +364,7 @@ void DetectorModule::registerRoutes(AsyncWebServer& server) {
     // Clear device history
     server.on("/api/detector/clear-devices", HTTP_POST, [this](AsyncWebServerRequest* r) {
         _devices.clear();
-        Preferences p;
-        p.begin("ouispy-dev", false);
-        p.clear();
-        p.end();
+        storage::clearDetDevices();
         r->send(200, "application/json", "{\"success\":true}");
     });
 

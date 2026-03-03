@@ -8,7 +8,6 @@
  */
 
 #include <Arduino.h>
-#include <Preferences.h>
 #include <nvs_flash.h>
 
 // HAL
@@ -27,6 +26,9 @@
 #include "modules/foxhunter.h"
 #include "modules/module.h"
 #include "modules/skyspy.h"
+
+// Storage
+#include "storage/nvs_store.h"
 
 // Web
 #include "web/server.h"
@@ -74,40 +76,16 @@ static void checkBootButton() {
 }
 
 // ============================================================================
-// Load/Save Module Enabled States (NVS)
+// Load Module Enabled States
 // ============================================================================
 
 static void loadModuleStates() {
-    Preferences p;
-    p.begin("ouispy-mod", true);
     for (int i = 0; i < MODULE_COUNT; i++) {
-        bool enabled = p.getBool(modules[i]->name(), true); // default: all enabled
+        bool enabled = storage::getModuleEnabled(modules[i]->name());
         modules[i]->setEnabled(enabled);
         Serial.printf("[OUI-SPY] Module '%s': %s\n", modules[i]->name(),
                       enabled ? "ENABLED" : "DISABLED");
     }
-    p.end();
-}
-
-// ============================================================================
-// AP Config
-// ============================================================================
-
-static String loadAPSSID() {
-    Preferences p;
-    p.begin("ouispy-ap", true);
-    String ssid = p.getString("ssid", "oui-spy");
-    String pass = p.getString("pass", "ouispy123");
-    p.end();
-    return ssid;
-}
-
-static String loadAPPass() {
-    Preferences p;
-    p.begin("ouispy-ap", true);
-    String pass = p.getString("pass", "ouispy123");
-    p.end();
-    return pass;
 }
 
 // ============================================================================
@@ -140,8 +118,8 @@ void setup() {
     hal::gpsInit();
 
     // ---- WiFi Init ----
-    String ssid = loadAPSSID();
-    String pass = loadAPPass();
+    String ssid = storage::getAPSSID();
+    String pass = storage::getAPPass();
     hal::wifiInit(ssid, pass);
 
     // ---- BLE Init ----

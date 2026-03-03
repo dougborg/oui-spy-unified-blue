@@ -17,4 +17,4 @@ repos:
     rev: v18.1.8
     hooks:
       - id: clang-format
-        files: ^src/(hal|modules|web)/.*\.(c|cc|cpp|h|hh|hpp)$|^src/main\.cpp$
+        files: ^src/(hal|modules|storage|web)/.*\.(c|cc|cpp|h|hh|hpp)$|^src/main\.cpp$
