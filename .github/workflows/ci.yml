@@ -59,6 +59,7 @@ jobs:
         run: |
           python -m gcovr --root . --txt --print-summary \
             --filter src/opendroneid.c \
+            --filter src/wifi.c \
             --xml-pretty --xml coverage-native.xml
 
       - name: Upload native coverage report

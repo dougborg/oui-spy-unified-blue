@@ -31,6 +31,7 @@ coverage-cpp:
     pio test -e native
     python3 -m gcovr --root . --txt --print-summary \
         --filter src/opendroneid.c \
+        --filter src/wifi.c \
         --xml-pretty --xml coverage-native.xml
 
 lint:
