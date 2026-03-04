@@ -23,32 +23,48 @@ bash .devcontainer/select-profile.sh linux-usb
 
 Then run **Dev Containers: Rebuild and Reopen in Container**.
 
-Inside the container, you can use either raw PlatformIO commands (`pio ...`) or the project `Justfile` (`just build`, `just upload`, `just monitor`). `just` is preinstalled in this devcontainer image.
+## What's pre-installed
 
-Quality checks in-container:
+The Docker image includes:
 
-- `just lint`
-- `just test`
-- `just test-cpp`
-- `just analyze-cpp`
-- `just quality`
+- PlatformIO CLI with all project platform/library packages
+- Python dev tools (`pre-commit`, `pytest`, `gcovr`)
+- Pre-commit hook environments (clang-format, markdownlint-cli2, pre-commit-hooks) — cached in the image so hooks run instantly without reinstalling
+- `cppcheck` for static analysis
+- `just` task runner
 
-`just analyze-cpp` runs `cppcheck` only against maintained source directories (`src/main.cpp`, `src/hal`, `src/modules`, `src/web`).
+## In-container commands
 
-The image also pre-installs PlatformIO packages declared in `platformio.ini` during image build for faster first-run builds.
+Build and flash:
+
+```bash
+pio run                  # build firmware
+pio run -t upload        # flash (Linux USB only)
+pio device monitor       # serial monitor
+```
+
+Quality checks:
+
+```bash
+just lint                # pre-commit (formatting, linting)
+just test                # Python tests
+just test-cpp            # native C++ tests (53 tests)
+just coverage-cpp        # tests + coverage report (35% threshold)
+just analyze-cpp         # cppcheck static analysis
+just quality             # all of the above
+```
 
 ## Recommended workflow by host OS
 
 ### Linux
 
-- If you need direct flashing from container, copy the Linux template over the default:
+If you need direct flashing from container:
 
 ```bash
 bash .devcontainer/select-profile.sh linux-usb
 ```
 
-- Rebuild/reopen container in VS Code
-- Build/flash inside container:
+Rebuild/reopen container, then build and flash inside:
 
 ```bash
 pio run
@@ -58,7 +74,7 @@ pio device monitor
 
 ### macOS
 
-Use the default `devcontainer.json` for build/dev. USB passthrough can be limited depending on Docker Desktop and host setup.
+Use the default `devcontainer.json` for build/dev. USB passthrough can be limited depending on Docker Desktop setup.
 
 Recommended path:
 
@@ -69,14 +85,12 @@ Recommended path:
 
 Use the default `devcontainer.json` for build/dev.
 
-For serial flashing, USB forwarding to WSL can vary by setup (`usbipd-win` + WSL attach). If serial isn’t visible in-container, use host upload instead:
+For serial flashing, USB forwarding to WSL can vary by setup (`usbipd-win` + WSL attach). If serial isn't visible in-container, use host upload instead:
 
 - Build in container: `pio run`
 - Flash from host: `python flash.py` or host `pio run -t upload`
 
 ## Quick reset to portable default
-
-If you switched templates and want to revert:
 
 ```bash
 bash .devcontainer/select-profile.sh portable
