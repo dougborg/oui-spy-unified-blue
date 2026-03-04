@@ -3,6 +3,7 @@
 #include "../hal/gps.h"
 #include "../storage/nvs_store.h"
 #include "dashboard.h"
+#include <ArduinoJson.h>
 
 namespace web {
 
@@ -28,26 +29,27 @@ void registerSystemRoutes(IModule** modules, int count) {
 
     // System status
     _server.on("/api/status", HTTP_GET, [](AsyncWebServerRequest* r) {
-        char buf[256];
-        snprintf(buf, sizeof(buf), "{\"uptime\":%lu,\"heap\":%u,\"psram\":%u,\"buzzer\":%s}",
-                 millis() / 1000, ESP.getFreeHeap(), ESP.getFreePsram(),
-                 hal::buzzerIsEnabled() ? "true" : "false");
-        r->send(200, "application/json", buf);
+        JsonDocument doc;
+        doc["uptime"] = millis() / 1000;
+        doc["heap"] = ESP.getFreeHeap();
+        doc["psram"] = ESP.getFreePsram();
+        doc["buzzer"] = hal::buzzerIsEnabled();
+        String json;
+        serializeJson(doc, json);
+        r->send(200, "application/json", json);
     });
 
     // Module list with enabled state
     _server.on("/api/modules", HTTP_GET, [](AsyncWebServerRequest* r) {
-        String json = "[";
+        JsonDocument doc;
+        JsonArray arr = doc.to<JsonArray>();
         for (int i = 0; i < _moduleCount; i++) {
-            if (i > 0)
-                json += ",";
-            json += "{\"name\":\"";
-            json += _modules[i]->name();
-            json += "\",\"enabled\":";
-            json += _modules[i]->isEnabled() ? "true" : "false";
-            json += "}";
+            JsonObject obj = arr.add<JsonObject>();
+            obj["name"] = _modules[i]->name();
+            obj["enabled"] = _modules[i]->isEnabled();
         }
-        json += "]";
+        String json;
+        serializeJson(doc, json);
         r->send(200, "application/json", json);
     });
 
@@ -75,7 +77,11 @@ void registerSystemRoutes(IModule** modules, int count) {
         if (r->hasParam("on", true)) {
             bool on = r->getParam("on", true)->value() == "true";
             hal::buzzerSetEnabled(on);
-            r->send(200, "application/json", "{\"buzzer\":" + String(on ? "true" : "false") + "}");
+            JsonDocument doc;
+            doc["buzzer"] = on;
+            String json;
+            serializeJson(doc, json);
+            r->send(200, "application/json", json);
         } else {
             r->send(400, "application/json", "{\"error\":\"missing on param\"}");
         }
@@ -84,21 +90,28 @@ void registerSystemRoutes(IModule** modules, int count) {
     // GPS status
     _server.on("/api/gps", HTTP_GET, [](AsyncWebServerRequest* r) {
         const hal::GPSData& g = hal::gpsGet();
-        char buf[256];
-        snprintf(buf, sizeof(buf),
-                 "{\"valid\":%s,\"lat\":%.8f,\"lon\":%.8f,\"acc\":%.1f,"
-                 "\"hardware\":%s,\"hw_detected\":%s,\"hw_fix\":%s,\"sats\":%d,"
-                 "\"fresh\":%s}",
-                 g.valid ? "true" : "false", g.lat, g.lon, g.accuracy,
-                 g.isHardware ? "true" : "false", g.hwDetected ? "true" : "false",
-                 g.hwFix ? "true" : "false", g.satellites, hal::gpsIsFresh() ? "true" : "false");
-        r->send(200, "application/json", buf);
+        JsonDocument doc;
+        doc["valid"] = g.valid;
+        doc["lat"] = serialized(String(g.lat, 8));
+        doc["lon"] = serialized(String(g.lon, 8));
+        doc["acc"] = serialized(String(g.accuracy, 1));
+        doc["hardware"] = g.isHardware;
+        doc["hw_detected"] = g.hwDetected;
+        doc["hw_fix"] = g.hwFix;
+        doc["sats"] = g.satellites;
+        doc["fresh"] = hal::gpsIsFresh();
+        String json;
+        serializeJson(doc, json);
+        r->send(200, "application/json", json);
     });
 
     // AP settings
     _server.on("/api/ap", HTTP_GET, [](AsyncWebServerRequest* r) {
-        String ssid = storage::getAPSSID();
-        r->send(200, "application/json", "{\"ssid\":\"" + ssid + "\"}");
+        JsonDocument doc;
+        doc["ssid"] = storage::getAPSSID();
+        String json;
+        serializeJson(doc, json);
+        r->send(200, "application/json", json);
     });
 
     _server.on("/api/ap", HTTP_POST, [](AsyncWebServerRequest* r) {

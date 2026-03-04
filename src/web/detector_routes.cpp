@@ -1,21 +1,23 @@
 #include "../modules/detector.h"
 #include "../storage/nvs_store.h"
 #include "routes.h"
+#include <ArduinoJson.h>
 #include <ESPAsyncWebServer.h>
 
 void registerDetectorRoutes(AsyncWebServer& server, DetectorModule& mod) {
     // Get filters
     server.on("/api/detector/filters", HTTP_GET, [&mod](AsyncWebServerRequest* r) {
-        String json = "[";
+        JsonDocument doc;
+        JsonArray arr = doc.to<JsonArray>();
         const auto& filters = mod.filters();
         for (int i = 0; i < (int)filters.size(); i++) {
-            if (i > 0)
-                json += ",";
-            json += "{\"id\":\"" + filters[i].identifier +
-                    "\",\"full\":" + (filters[i].isFullMAC ? "true" : "false") + ",\"desc\":\"" +
-                    filters[i].description + "\"}";
+            JsonObject obj = arr.add<JsonObject>();
+            obj["id"] = filters[i].identifier;
+            obj["full"] = filters[i].isFullMAC;
+            obj["desc"] = filters[i].description;
         }
-        json += "]";
+        String json;
+        serializeJson(doc, json);
         r->send(200, "application/json", json);
     });
 
@@ -25,25 +27,30 @@ void registerDetectorRoutes(AsyncWebServer& server, DetectorModule& mod) {
         mod.setBuzzerEnabled(r->hasParam("buzzerEnabled", true));
         mod.setLedEnabled(r->hasParam("ledEnabled", true));
         mod.saveFilters();
-        r->send(200, "application/json", "{\"saved\":" + String(mod.filters().size()) + "}");
+        JsonDocument doc;
+        doc["saved"] = (int)mod.filters().size();
+        String json;
+        serializeJson(doc, json);
+        r->send(200, "application/json", json);
     });
 
     // Get detected devices
     server.on("/api/detector/devices", HTTP_GET, [&mod](AsyncWebServerRequest* r) {
-        String json = "{\"devices\":[";
+        JsonDocument doc;
+        JsonArray arr = doc["devices"].to<JsonArray>();
         unsigned long now = millis();
         const auto& devices = mod.devices();
         for (int i = 0; i < (int)devices.size(); i++) {
-            if (i > 0)
-                json += ",";
-            String alias = mod.getAlias(devices[i].macAddress);
+            JsonObject obj = arr.add<JsonObject>();
+            obj["mac"] = devices[i].macAddress;
+            obj["rssi"] = devices[i].rssi;
+            obj["filter"] = devices[i].filterDescription;
+            obj["alias"] = mod.getAlias(devices[i].macAddress);
             unsigned long ts = (now >= devices[i].lastSeen) ? (now - devices[i].lastSeen) : 0;
-            json += "{\"mac\":\"" + devices[i].macAddress +
-                    "\",\"rssi\":" + String(devices[i].rssi) + ",\"filter\":\"" +
-                    devices[i].filterDescription + "\",\"alias\":\"" + alias +
-                    "\",\"timeSince\":" + String(ts) + "}";
+            obj["timeSince"] = ts;
         }
-        json += "]}";
+        String json;
+        serializeJson(doc, json);
         r->send(200, "application/json", json);
     });
 

@@ -1,6 +1,7 @@
 #include "../hal/gps.h"
 #include "../modules/flockyou.h"
 #include "routes.h"
+#include <ArduinoJson.h>
 #include <ESPAsyncWebServer.h>
 
 void registerFlockyouRoutes(AsyncWebServer& server, FlockyouModule& mod) {
@@ -30,14 +31,18 @@ void registerFlockyouRoutes(AsyncWebServer& server, FlockyouModule& mod) {
             gpsSrc = "hw";
         else if (hal::gpsIsFresh())
             gpsSrc = "phone";
-        char buf[320];
-        snprintf(buf, sizeof(buf),
-                 "{\"total\":%d,\"raven\":%d,\"ble\":\"active\","
-                 "\"gps_valid\":%s,\"gps_tagged\":%d,\"gps_src\":\"%s\","
-                 "\"gps_sats\":%d,\"gps_hw_detected\":%s}",
-                 mod.detectionCount(), raven, hal::gpsIsFresh() ? "true" : "false", withGPS, gpsSrc,
-                 g.satellites, g.hwDetected ? "true" : "false");
-        r->send(200, "application/json", buf);
+        JsonDocument doc;
+        doc["total"] = mod.detectionCount();
+        doc["raven"] = raven;
+        doc["ble"] = "active";
+        doc["gps_valid"] = hal::gpsIsFresh();
+        doc["gps_tagged"] = withGPS;
+        doc["gps_src"] = gpsSrc;
+        doc["gps_sats"] = g.satellites;
+        doc["gps_hw_detected"] = g.hwDetected;
+        String json;
+        serializeJson(doc, json);
+        r->send(200, "application/json", json);
     });
 
     server.on("/api/flockyou/gps", HTTP_GET, [](AsyncWebServerRequest* r) {

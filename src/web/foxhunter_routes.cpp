@@ -1,17 +1,20 @@
 #include "../modules/detector_logic.h"
 #include "../modules/foxhunter.h"
 #include "routes.h"
+#include <ArduinoJson.h>
 #include <ESPAsyncWebServer.h>
 
 void registerFoxhunterRoutes(AsyncWebServer& server, FoxhunterModule& mod) {
     // Get current target and RSSI
     server.on("/api/foxhunter/status", HTTP_GET, [&mod](AsyncWebServerRequest* r) {
-        char buf[200];
-        snprintf(buf, sizeof(buf),
-                 "{\"target\":\"%s\",\"detected\":%s,\"rssi\":%d,\"lastSeen\":%lu}",
-                 mod.targetMAC().c_str(), mod.targetDetected() ? "true" : "false",
-                 mod.currentRSSI(), mod.lastTargetSeen());
-        r->send(200, "application/json", buf);
+        JsonDocument doc;
+        doc["target"] = mod.targetMAC();
+        doc["detected"] = mod.targetDetected();
+        doc["rssi"] = mod.currentRSSI();
+        doc["lastSeen"] = mod.lastTargetSeen();
+        String json;
+        serializeJson(doc, json);
+        r->send(200, "application/json", json);
     });
 
     // Set target MAC (with validation)
@@ -24,7 +27,11 @@ void registerFoxhunterRoutes(AsyncWebServer& server, FoxhunterModule& mod) {
                 return;
             }
             mod.setTarget(mac);
-            r->send(200, "application/json", "{\"target\":\"" + mod.targetMAC() + "\"}");
+            JsonDocument doc;
+            doc["target"] = mod.targetMAC();
+            String json;
+            serializeJson(doc, json);
+            r->send(200, "application/json", json);
         } else {
             r->send(400, "application/json", "{\"error\":\"missing mac\"}");
         }
@@ -32,10 +39,12 @@ void registerFoxhunterRoutes(AsyncWebServer& server, FoxhunterModule& mod) {
 
     // Get live RSSI (for polling)
     server.on("/api/foxhunter/rssi", HTTP_GET, [&mod](AsyncWebServerRequest* r) {
-        char buf[64];
-        snprintf(buf, sizeof(buf), "{\"rssi\":%d,\"detected\":%s}", mod.currentRSSI(),
-                 mod.targetDetected() ? "true" : "false");
-        r->send(200, "application/json", buf);
+        JsonDocument doc;
+        doc["rssi"] = mod.currentRSSI();
+        doc["detected"] = mod.targetDetected();
+        String json;
+        serializeJson(doc, json);
+        r->send(200, "application/json", json);
     });
 
     // Clear target
