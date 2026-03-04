@@ -33,8 +33,8 @@ coverage-cpp:
     pio test -e native_parser
     python3 -m gcovr --root . --txt --print-summary \
         --fail-under-line 35 \
-        --filter src/opendroneid.c \
-        --filter src/wifi.c \
+        --filter src/protocols/opendroneid.c \
+        --filter src/protocols/wifi.c \
         --filter src/modules/detector_logic.cpp \
         --filter src/modules/flockyou_logic.cpp \
         --filter src/modules/foxhunter_logic.cpp \
@@ -50,7 +50,7 @@ analyze-cpp:
         cppcheck --quiet --error-exitcode=1 \
             --enable=warning,performance \
             --inline-suppr --suppress=missingIncludeSystem \
-            -I src src/main.cpp src/hal src/modules src/storage src/web src/opendroneid.c src/wifi.c
+            -I src -I src/protocols src/app src/hal src/modules src/storage src/web src/protocols
 
 quality:
     just lint

@@ -1,1 +1,1 @@
-#include "../../src/wifi.c"
+#include "../../src/protocols/wifi.c"
