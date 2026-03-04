@@ -90,12 +90,13 @@ void skyspyWiFiCallback(void* buffer, wifi_promiscuous_pkt_type_t type) {
 }
 
 void SkySpyModule::handleWiFiFrame(const uint8_t* payload, int length, int rssi) {
-    if (!_enabled)
+    if (!_enabled || !payload || length < 1)
         return;
 
     // NAN Action Frames (drone Remote ID)
+    // Need at least 16 bytes: 4 (frame ctrl) + 6 (NAN dest) + 6 (source MAC)
     static const uint8_t nan_dest[6] = {0x51, 0x6f, 0x9a, 0x01, 0x00, 0x00};
-    if (length >= 10 && memcmp(nan_dest, &payload[4], 6) == 0) {
+    if (length >= 16 && memcmp(nan_dest, &payload[4], 6) == 0) {
         char nan_mac[6] = {0};
         if (_mutex && xSemaphoreTake(_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
             memset(&_uasData, 0, sizeof(_uasData));
@@ -117,7 +118,8 @@ void SkySpyModule::handleWiFiFrame(const uint8_t* payload, int length, int rssi)
         }
     }
     // Beacon frames with vendor-specific ODID IEs
-    else if (payload[0] == 0x80) {
+    // Need at least 37 bytes: 36 (beacon header) + 1 (first IE byte)
+    else if (length >= 37 && payload[0] == 0x80) {
         int offset = 36;
         while (offset + 2 <= length) {
             int typ = payload[offset];
@@ -130,7 +132,7 @@ void SkySpyModule::handleWiFiFrame(const uint8_t* payload, int length, int rssi)
                  ((payload[offset + 2] == 0xfa && payload[offset + 3] == 0x0b &&
                    payload[offset + 4] == 0xbc)))) {
                 int j = offset + 7;
-                if (j < length) {
+                if (j < length && length >= 16) {
                     if (_mutex && xSemaphoreTake(_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
                         memset(&_uasData, 0, sizeof(_uasData));
                         odid_message_process_pack(&_uasData, (uint8_t*)&payload[j], length - j);
