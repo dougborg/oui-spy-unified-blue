@@ -174,8 +174,8 @@ void getDetDevice(int index, String& mac, int& rssi, unsigned long& lastSeen, St
     p.end();
 }
 
-void saveDetDevices(int count, const String* macs, const int* rssis,
-                    const unsigned long* lastSeens, const String* filters) {
+void saveDetDevices(int count, const String* macs, const int* rssis, const unsigned long* lastSeens,
+                    const String* filters) {
     Preferences p;
     p.begin("ouispy-dev", false);
     p.putInt("count", count);
