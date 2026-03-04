@@ -13,8 +13,8 @@ enum class ProxEvent {
 // Result of processing a proximity tick (loop iteration)
 struct ProxTickResult {
     ProxEvent event;
-    bool shouldBeep;       // true if proximity beep should sound
-    bool shouldPrintRSSI;  // true if RSSI should be printed
+    bool shouldBeep;      // true if proximity beep should sound
+    bool shouldPrintRSSI; // true if RSSI should be printed
 };
 
 // Evaluate the proximity state machine during loop().
@@ -30,10 +30,10 @@ ProxTickResult evaluateProxTick(bool targetDetected, uint32_t now, uint32_t last
 
 // Result of processing a BLE advertisement for target tracking
 enum class TargetMatchEvent {
-    NO_MATCH,            // MAC doesn't match target
-    UPDATE_EXISTING,     // Target already tracked, just update RSSI/time
-    FIRST_ACQUISITION,   // First time seeing target this session
-    REACQUIRED,          // Target was lost, now seen again
+    NO_MATCH,          // MAC doesn't match target
+    UPDATE_EXISTING,   // Target already tracked, just update RSSI/time
+    FIRST_ACQUISITION, // First time seeing target this session
+    REACQUIRED,        // Target was lost, now seen again
 };
 
 // Evaluate whether a scanned MAC matches the target and what event that represents.

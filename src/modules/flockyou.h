@@ -45,6 +45,19 @@ class FlockyouModule : public IDetectionModule, public hal::BLEListener {
     SemaphoreHandle_t mutex() const {
         return _mutex;
     }
+    bool fsReady() const {
+        return _fsReady;
+    }
+
+    // Public operations for route handlers
+    void writeJSON(AsyncResponseStream* resp);
+    void writeKML(AsyncResponseStream* resp);
+    void writeCSV(AsyncResponseStream* resp);
+    void writePatterns(AsyncResponseStream* resp);
+    void clearDetections();
+    void saveSession();
+    void serveHistory(AsyncWebServerRequest* r);
+    void serveHistoryDownload(AsyncWebServerRequest* r);
 
   private:
     bool _enabled = true;
@@ -67,8 +80,5 @@ class FlockyouModule : public IDetectionModule, public hal::BLEListener {
     void attachGPS(FYDetection& d);
 
     // Session persistence
-    void saveSession();
     void promotePrevSession();
-    void writeJSON(AsyncResponseStream* resp);
-    void writeKML(AsyncResponseStream* resp);
 };

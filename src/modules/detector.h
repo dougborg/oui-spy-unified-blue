@@ -51,6 +51,21 @@ class DetectorModule : public IDetectionModule, public hal::BLEListener {
         return _ledEnabled;
     }
 
+    // Public operations for route handlers
+    void parseFiltersFromRequest(AsyncWebServerRequest* request);
+    void setBuzzerEnabled(bool enabled) {
+        _buzzerEnabled = enabled;
+    }
+    void setLedEnabled(bool enabled) {
+        _ledEnabled = enabled;
+    }
+    void saveFilters();
+    void saveAliases();
+    String getAlias(const String& mac);
+    void setAlias(const String& mac, const String& alias);
+    void clearDevices();
+    void clearFilters();
+
   private:
     bool _enabled = true;
     std::vector<DetDeviceInfo> _devices;
@@ -73,15 +88,10 @@ class DetectorModule : public IDetectionModule, public hal::BLEListener {
     void normMAC(String& mac);
     bool isValidMAC(const String& mac);
     bool matchesFilter(const String& deviceMAC, String& matchedDesc);
-    String getAlias(const String& mac);
-    void setAlias(const String& mac, const String& alias);
 
     // NVS persistence
-    void saveFilters();
     void loadFilters();
-    void saveAliases();
     void loadAliases();
     void saveDevices();
     void loadDevices();
-    void parseFilters(AsyncWebServerRequest* request);
 };

@@ -2,6 +2,7 @@
 #include "../hal/buzzer.h"
 #include "../hal/led.h"
 #include "../hal/wifi_mgr.h"
+#include "../web/routes.h"
 #include "odid_wifi.h"
 #include "opendroneid.h"
 #include <freertos/FreeRTOS.h>
@@ -265,75 +266,11 @@ void SkySpyModule::onBLEAdvertisement(NimBLEAdvertisedDevice* device) {
 }
 
 // ============================================================================
-// Web Routes: /api/skyspy/*
+// Web Routes
 // ============================================================================
 
 void SkySpyModule::registerRoutes(AsyncWebServer& server) {
-    server.on("/api/skyspy/drones", HTTP_GET, [this](AsyncWebServerRequest* r) {
-        String json = "[";
-        if (_mutex && xSemaphoreTake(_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-            bool first = true;
-            for (int i = 0; i < SS_MAX_UAVS; i++) {
-                if (_uavs[i].mac[0] == 0)
-                    continue;
-                if (!first)
-                    json += ",";
-                first = false;
-                char macStr[18];
-                snprintf(macStr, sizeof(macStr), "%02x:%02x:%02x:%02x:%02x:%02x", _uavs[i].mac[0],
-                         _uavs[i].mac[1], _uavs[i].mac[2], _uavs[i].mac[3], _uavs[i].mac[4],
-                         _uavs[i].mac[5]);
-                json += "{\"mac\":\"";
-                json += macStr;
-                json += "\",\"rssi\":";
-                json += String(_uavs[i].rssi);
-                json += ",\"drone_lat\":";
-                json += String(_uavs[i].latD, 6);
-                json += ",\"drone_long\":";
-                json += String(_uavs[i].longD, 6);
-                json += ",\"altitude\":";
-                json += String(_uavs[i].altitudeMsl);
-                json += ",\"height\":";
-                json += String(_uavs[i].heightAgl);
-                json += ",\"speed\":";
-                json += String(_uavs[i].speed);
-                json += ",\"heading\":";
-                json += String(_uavs[i].heading);
-                json += ",\"pilot_lat\":";
-                json += String(_uavs[i].baseLatD, 6);
-                json += ",\"pilot_long\":";
-                json += String(_uavs[i].baseLongD, 6);
-                json += ",\"uav_id\":\"";
-                json += _uavs[i].uavId;
-                json += "\",\"op_id\":\"";
-                json += _uavs[i].opId;
-                json += "\",\"last_seen\":";
-                json += String(_uavs[i].lastSeen);
-                json += "}";
-            }
-            xSemaphoreGive(_mutex);
-        }
-        json += "]";
-        r->send(200, "application/json", json);
-    });
-
-    server.on("/api/skyspy/status", HTTP_GET, [this](AsyncWebServerRequest* r) {
-        int count = 0;
-        unsigned long now = millis();
-        if (_mutex && xSemaphoreTake(_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
-            for (int i = 0; i < SS_MAX_UAVS; i++) {
-                if (_uavs[i].mac[0] != 0 && (now - _uavs[i].lastSeen) < 7000)
-                    count++;
-            }
-            xSemaphoreGive(_mutex);
-        }
-        char buf[100];
-        snprintf(buf, sizeof(buf), "{\"active_drones\":%d,\"in_range\":%s}", count,
-                 _deviceInRange ? "true" : "false");
-        r->send(200, "application/json", buf);
-    });
-
-    Serial.println("[SKYSPY] Web routes registered");
+    registerSkySpyRoutes(server, *this);
 }
 
 bool SkySpyModule::isEnabled() {

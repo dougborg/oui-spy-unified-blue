@@ -39,6 +39,17 @@ class SkySpyModule : public IDetectionModule, public hal::BLEListener {
     // Called from static WiFi callback
     void handleWiFiFrame(const uint8_t* payload, int length, int rssi);
 
+    // Public accessors for route handlers
+    SemaphoreHandle_t uavMutex() const {
+        return _mutex;
+    }
+    const SSUavData& uavAt(int index) const {
+        return _uavs[index];
+    }
+    bool deviceInRange() const {
+        return _deviceInRange;
+    }
+
   private:
     bool _enabled = true;
     SSUavData _uavs[SS_MAX_UAVS] = {};

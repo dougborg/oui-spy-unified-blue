@@ -4,6 +4,7 @@
 #include "../hal/led.h"
 #include "../hal/neopixel.h"
 #include "../storage/nvs_store.h"
+#include "../web/routes.h"
 
 // ============================================================================
 // Foxhunter Module: Single-target RSSI proximity tracker
@@ -83,60 +84,34 @@ void FoxhunterModule::onBLEAdvertisement(NimBLEAdvertisedDevice* device) {
 }
 
 // ============================================================================
-// Web Routes: /api/foxhunter/*
+// Public Operations (used by route handlers)
+// ============================================================================
+
+void FoxhunterModule::setTarget(const String& mac) {
+    _targetMAC = mac;
+    _targetMAC.trim();
+    _targetMAC.toUpperCase();
+    saveConfig();
+    _targetDetected = false;
+    _sessionFirstDetection = true;
+    _currentRSSI = -100;
+    hal::bleRequestAggressiveScan(_targetMAC.length() > 0);
+}
+
+void FoxhunterModule::clearTarget() {
+    _targetMAC = "";
+    saveConfig();
+    _targetDetected = false;
+    hal::buzzerSetProximity(false);
+    hal::bleRequestAggressiveScan(false);
+}
+
+// ============================================================================
+// Web Routes
 // ============================================================================
 
 void FoxhunterModule::registerRoutes(AsyncWebServer& server) {
-    // Get current target and RSSI
-    server.on("/api/foxhunter/status", HTTP_GET, [this](AsyncWebServerRequest* r) {
-        char buf[200];
-        snprintf(
-            buf, sizeof(buf), "{\"target\":\"%s\",\"detected\":%s,\"rssi\":%d,\"lastSeen\":%lu}",
-            _targetMAC.c_str(), _targetDetected ? "true" : "false", _currentRSSI, _lastTargetSeen);
-        r->send(200, "application/json", buf);
-    });
-
-    // Set target MAC
-    server.on("/api/foxhunter/target", HTTP_POST, [this](AsyncWebServerRequest* r) {
-        if (r->hasParam("mac", true)) {
-            _targetMAC = r->getParam("mac", true)->value();
-            _targetMAC.trim();
-            _targetMAC.toUpperCase();
-            saveConfig();
-            _targetDetected = false;
-            _sessionFirstDetection = true;
-            _currentRSSI = -100;
-            // Request aggressive scan when we have a target
-            if (_targetMAC.length() > 0) {
-                hal::bleRequestAggressiveScan(true);
-            } else {
-                hal::bleRequestAggressiveScan(false);
-            }
-            r->send(200, "application/json", "{\"target\":\"" + _targetMAC + "\"}");
-        } else {
-            r->send(400, "application/json", "{\"error\":\"missing mac\"}");
-        }
-    });
-
-    // Get live RSSI (for polling)
-    server.on("/api/foxhunter/rssi", HTTP_GET, [this](AsyncWebServerRequest* r) {
-        char buf[64];
-        snprintf(buf, sizeof(buf), "{\"rssi\":%d,\"detected\":%s}", _currentRSSI,
-                 _targetDetected ? "true" : "false");
-        r->send(200, "application/json", buf);
-    });
-
-    // Clear target
-    server.on("/api/foxhunter/clear", HTTP_POST, [this](AsyncWebServerRequest* r) {
-        _targetMAC = "";
-        saveConfig();
-        _targetDetected = false;
-        hal::buzzerSetProximity(false);
-        hal::bleRequestAggressiveScan(false);
-        r->send(200, "application/json", "{\"cleared\":true}");
-    });
-
-    Serial.println("[FOXHUNTER] Web routes registered");
+    registerFoxhunterRoutes(server, *this);
 }
 
 bool FoxhunterModule::isEnabled() {

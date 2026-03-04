@@ -3,6 +3,7 @@
 #include "../hal/led.h"
 #include "../hal/neopixel.h"
 #include "../storage/nvs_store.h"
+#include "../web/routes.h"
 #include "detector_logic.h"
 #include <algorithm>
 
@@ -252,10 +253,20 @@ void DetectorModule::onBLEAdvertisement(NimBLEAdvertisedDevice* device) {
 }
 
 // ============================================================================
-// Web Routes: /api/detector/*
+// Public Operations (used by route handlers)
 // ============================================================================
 
-void DetectorModule::parseFilters(AsyncWebServerRequest* request) {
+void DetectorModule::clearDevices() {
+    _devices.clear();
+    storage::clearDetDevices();
+}
+
+void DetectorModule::clearFilters() {
+    _filters.clear();
+    saveFilters();
+}
+
+void DetectorModule::parseFiltersFromRequest(AsyncWebServerRequest* request) {
     _filters.clear();
     // OUI entries
     if (request->hasParam("ouis", true)) {
@@ -308,74 +319,7 @@ void DetectorModule::parseFilters(AsyncWebServerRequest* request) {
 }
 
 void DetectorModule::registerRoutes(AsyncWebServer& server) {
-    // Get filters
-    server.on("/api/detector/filters", HTTP_GET, [this](AsyncWebServerRequest* r) {
-        String json = "[";
-        for (int i = 0; i < (int)_filters.size(); i++) {
-            if (i > 0)
-                json += ",";
-            json += "{\"id\":\"" + _filters[i].identifier +
-                    "\",\"full\":" + (_filters[i].isFullMAC ? "true" : "false") + ",\"desc\":\"" +
-                    _filters[i].description + "\"}";
-        }
-        json += "]";
-        r->send(200, "application/json", json);
-    });
-
-    // Save filters
-    server.on("/api/detector/filters", HTTP_POST, [this](AsyncWebServerRequest* r) {
-        parseFilters(r);
-        // Buzzer/LED toggles
-        _buzzerEnabled = r->hasParam("buzzerEnabled", true);
-        _ledEnabled = r->hasParam("ledEnabled", true);
-        saveFilters();
-        r->send(200, "application/json", "{\"saved\":" + String(_filters.size()) + "}");
-    });
-
-    // Get detected devices
-    server.on("/api/detector/devices", HTTP_GET, [this](AsyncWebServerRequest* r) {
-        String json = "{\"devices\":[";
-        unsigned long now = millis();
-        for (int i = 0; i < (int)_devices.size(); i++) {
-            if (i > 0)
-                json += ",";
-            String alias = getAlias(_devices[i].macAddress);
-            unsigned long ts = (now >= _devices[i].lastSeen) ? (now - _devices[i].lastSeen) : 0;
-            json += "{\"mac\":\"" + _devices[i].macAddress +
-                    "\",\"rssi\":" + String(_devices[i].rssi) + ",\"filter\":\"" +
-                    _devices[i].filterDescription + "\",\"alias\":\"" + alias +
-                    "\",\"timeSince\":" + String(ts) + "}";
-        }
-        json += "]}";
-        r->send(200, "application/json", json);
-    });
-
-    // Save alias
-    server.on("/api/detector/alias", HTTP_POST, [this](AsyncWebServerRequest* r) {
-        if (r->hasParam("mac", true) && r->hasParam("alias", true)) {
-            setAlias(r->getParam("mac", true)->value(), r->getParam("alias", true)->value());
-            saveAliases();
-            r->send(200, "application/json", "{\"success\":true}");
-        } else {
-            r->send(400, "application/json", "{\"error\":\"missing params\"}");
-        }
-    });
-
-    // Clear device history
-    server.on("/api/detector/clear-devices", HTTP_POST, [this](AsyncWebServerRequest* r) {
-        _devices.clear();
-        storage::clearDetDevices();
-        r->send(200, "application/json", "{\"success\":true}");
-    });
-
-    // Clear filters
-    server.on("/api/detector/clear-filters", HTTP_POST, [this](AsyncWebServerRequest* r) {
-        _filters.clear();
-        saveFilters();
-        r->send(200, "application/json", "{\"success\":true}");
-    });
-
-    Serial.println("[DETECTOR] Web routes registered");
+    registerDetectorRoutes(server, *this);
 }
 
 bool DetectorModule::isEnabled() {

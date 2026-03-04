@@ -2,6 +2,7 @@
 #include "../hal/buzzer.h"
 #include "../hal/gps.h"
 #include "../hal/neopixel.h"
+#include "../web/routes.h"
 #include "flockyou_logic.h"
 #include <ArduinoJson.h>
 #include <LittleFS.h>
@@ -396,162 +397,93 @@ void FlockyouModule::onBLEAdvertisement(NimBLEAdvertisedDevice* dev) {
 }
 
 // ============================================================================
-// Web Routes: /api/flockyou/*
+// Public Operations (used by route handlers)
+// ============================================================================
+
+void FlockyouModule::writeCSV(AsyncResponseStream* resp) {
+    resp->println("mac,name,rssi,method,first_seen_ms,last_seen_ms,count,is_raven,raven_fw,"
+                  "latitude,longitude,gps_accuracy");
+    if (_mutex && xSemaphoreTake(_mutex, pdMS_TO_TICKS(200)) == pdTRUE) {
+        for (int i = 0; i < _detCount; i++) {
+            FYDetection& d = _det[i];
+            if (d.hasGPS) {
+                resp->printf("\"%s\",\"%s\",%d,\"%s\",%lu,%lu,%d,%s,\"%s\",%.8f,%.8f,%.1f\n", d.mac,
+                             d.name, d.rssi, d.method, d.firstSeen, d.lastSeen, d.count,
+                             d.isRaven ? "true" : "false", d.ravenFW, d.gpsLat, d.gpsLon, d.gpsAcc);
+            } else {
+                resp->printf("\"%s\",\"%s\",%d,\"%s\",%lu,%lu,%d,%s,\"%s\",,,\n", d.mac, d.name,
+                             d.rssi, d.method, d.firstSeen, d.lastSeen, d.count,
+                             d.isRaven ? "true" : "false", d.ravenFW);
+            }
+        }
+        xSemaphoreGive(_mutex);
+    }
+}
+
+void FlockyouModule::writePatterns(AsyncResponseStream* resp) {
+    resp->print("{\"macs\":[");
+    for (size_t i = 0; i < sizeof(fyMACPrefixes) / sizeof(fyMACPrefixes[0]); i++) {
+        if (i > 0)
+            resp->print(",");
+        resp->printf("\"%s\"", fyMACPrefixes[i]);
+    }
+    resp->print("],\"names\":[");
+    for (size_t i = 0; i < sizeof(fyNamePatterns) / sizeof(fyNamePatterns[0]); i++) {
+        if (i > 0)
+            resp->print(",");
+        resp->printf("\"%s\"", fyNamePatterns[i]);
+    }
+    resp->print("],\"mfr\":[");
+    for (size_t i = 0; i < sizeof(fyMfrIDs) / sizeof(fyMfrIDs[0]); i++) {
+        if (i > 0)
+            resp->print(",");
+        resp->printf("%u", fyMfrIDs[i]);
+    }
+    resp->print("],\"raven\":[");
+    for (size_t i = 0; i < sizeof(fyRavenUUIDs) / sizeof(fyRavenUUIDs[0]); i++) {
+        if (i > 0)
+            resp->print(",");
+        resp->printf("\"%s\"", fyRavenUUIDs[i]);
+    }
+    resp->print("]}");
+}
+
+void FlockyouModule::serveHistory(AsyncWebServerRequest* r) {
+    if (_fsReady && LittleFS.exists(FY_PREV_FILE)) {
+        r->send(LittleFS, FY_PREV_FILE, "application/json");
+    } else {
+        r->send(200, "application/json", "[]");
+    }
+}
+
+void FlockyouModule::serveHistoryDownload(AsyncWebServerRequest* r) {
+    if (_fsReady && LittleFS.exists(FY_PREV_FILE)) {
+        AsyncWebServerResponse* resp = r->beginResponse(LittleFS, FY_PREV_FILE, "application/json");
+        resp->addHeader("Content-Disposition",
+                        "attachment; filename=\"flockyou_prev_session.json\"");
+        r->send(resp);
+    } else {
+        r->send(404, "application/json", "{\"error\":\"no prior session\"}");
+    }
+}
+
+void FlockyouModule::clearDetections() {
+    saveSession();
+    if (_mutex && xSemaphoreTake(_mutex, pdMS_TO_TICKS(200)) == pdTRUE) {
+        _detCount = 0;
+        memset(_det, 0, sizeof(_det));
+        _triggered = false;
+        _deviceInRange = false;
+        xSemaphoreGive(_mutex);
+    }
+}
+
+// ============================================================================
+// Web Routes
 // ============================================================================
 
 void FlockyouModule::registerRoutes(AsyncWebServer& server) {
-    server.on("/api/flockyou/detections", HTTP_GET, [this](AsyncWebServerRequest* r) {
-        AsyncResponseStream* resp = r->beginResponseStream("application/json");
-        writeJSON(resp);
-        r->send(resp);
-    });
-
-    server.on("/api/flockyou/stats", HTTP_GET, [this](AsyncWebServerRequest* r) {
-        int raven = 0, withGPS = 0;
-        if (_mutex && xSemaphoreTake(_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-            for (int i = 0; i < _detCount; i++) {
-                if (_det[i].isRaven)
-                    raven++;
-                if (_det[i].hasGPS)
-                    withGPS++;
-            }
-            xSemaphoreGive(_mutex);
-        }
-        const hal::GPSData& g = hal::gpsGet();
-        const char* gpsSrc = "none";
-        if (g.isHardware && g.hwFix)
-            gpsSrc = "hw";
-        else if (hal::gpsIsFresh())
-            gpsSrc = "phone";
-        char buf[320];
-        snprintf(buf, sizeof(buf),
-                 "{\"total\":%d,\"raven\":%d,\"ble\":\"active\","
-                 "\"gps_valid\":%s,\"gps_tagged\":%d,\"gps_src\":\"%s\","
-                 "\"gps_sats\":%d,\"gps_hw_detected\":%s}",
-                 _detCount, raven, hal::gpsIsFresh() ? "true" : "false", withGPS, gpsSrc,
-                 g.satellites, g.hwDetected ? "true" : "false");
-        r->send(200, "application/json", buf);
-    });
-
-    server.on("/api/flockyou/gps", HTTP_GET, [](AsyncWebServerRequest* r) {
-        const hal::GPSData& g = hal::gpsGet();
-        if (g.hwFix) {
-            r->send(200, "application/json",
-                    "{\"status\":\"ignored\",\"reason\":\"hw_gps_active\"}");
-            return;
-        }
-        if (r->hasParam("lat") && r->hasParam("lon")) {
-            double lat = r->getParam("lat")->value().toDouble();
-            double lon = r->getParam("lon")->value().toDouble();
-            float acc = r->hasParam("acc") ? r->getParam("acc")->value().toFloat() : 0;
-            hal::gpsSetFromPhone(lat, lon, acc);
-            r->send(200, "application/json", "{\"status\":\"ok\"}");
-        } else {
-            r->send(400, "application/json", "{\"error\":\"lat,lon required\"}");
-        }
-    });
-
-    server.on("/api/flockyou/patterns", HTTP_GET, [](AsyncWebServerRequest* r) {
-        AsyncResponseStream* resp = r->beginResponseStream("application/json");
-        resp->print("{\"macs\":[");
-        for (size_t i = 0; i < sizeof(fyMACPrefixes) / sizeof(fyMACPrefixes[0]); i++) {
-            if (i > 0)
-                resp->print(",");
-            resp->printf("\"%s\"", fyMACPrefixes[i]);
-        }
-        resp->print("],\"names\":[");
-        for (size_t i = 0; i < sizeof(fyNamePatterns) / sizeof(fyNamePatterns[0]); i++) {
-            if (i > 0)
-                resp->print(",");
-            resp->printf("\"%s\"", fyNamePatterns[i]);
-        }
-        resp->print("],\"mfr\":[");
-        for (size_t i = 0; i < sizeof(fyMfrIDs) / sizeof(fyMfrIDs[0]); i++) {
-            if (i > 0)
-                resp->print(",");
-            resp->printf("%u", fyMfrIDs[i]);
-        }
-        resp->print("],\"raven\":[");
-        for (size_t i = 0; i < sizeof(fyRavenUUIDs) / sizeof(fyRavenUUIDs[0]); i++) {
-            if (i > 0)
-                resp->print(",");
-            resp->printf("\"%s\"", fyRavenUUIDs[i]);
-        }
-        resp->print("]}");
-        r->send(resp);
-    });
-
-    server.on("/api/flockyou/export/json", HTTP_GET, [this](AsyncWebServerRequest* r) {
-        AsyncResponseStream* resp = r->beginResponseStream("application/json");
-        resp->addHeader("Content-Disposition", "attachment; filename=\"flockyou_detections.json\"");
-        writeJSON(resp);
-        r->send(resp);
-    });
-
-    server.on("/api/flockyou/export/csv", HTTP_GET, [this](AsyncWebServerRequest* r) {
-        AsyncResponseStream* resp = r->beginResponseStream("text/csv");
-        resp->addHeader("Content-Disposition", "attachment; filename=\"flockyou_detections.csv\"");
-        resp->println("mac,name,rssi,method,first_seen_ms,last_seen_ms,count,is_raven,raven_fw,"
-                      "latitude,longitude,gps_accuracy");
-        if (_mutex && xSemaphoreTake(_mutex, pdMS_TO_TICKS(200)) == pdTRUE) {
-            for (int i = 0; i < _detCount; i++) {
-                FYDetection& d = _det[i];
-                if (d.hasGPS) {
-                    resp->printf("\"%s\",\"%s\",%d,\"%s\",%lu,%lu,%d,%s,\"%s\",%.8f,%.8f,%.1f\n",
-                                 d.mac, d.name, d.rssi, d.method, d.firstSeen, d.lastSeen, d.count,
-                                 d.isRaven ? "true" : "false", d.ravenFW, d.gpsLat, d.gpsLon,
-                                 d.gpsAcc);
-                } else {
-                    resp->printf("\"%s\",\"%s\",%d,\"%s\",%lu,%lu,%d,%s,\"%s\",,,\n", d.mac, d.name,
-                                 d.rssi, d.method, d.firstSeen, d.lastSeen, d.count,
-                                 d.isRaven ? "true" : "false", d.ravenFW);
-                }
-            }
-            xSemaphoreGive(_mutex);
-        }
-        r->send(resp);
-    });
-
-    server.on("/api/flockyou/export/kml", HTTP_GET, [this](AsyncWebServerRequest* r) {
-        AsyncResponseStream* resp = r->beginResponseStream("application/vnd.google-earth.kml+xml");
-        resp->addHeader("Content-Disposition", "attachment; filename=\"flockyou_detections.kml\"");
-        writeKML(resp);
-        r->send(resp);
-    });
-
-    server.on("/api/flockyou/history", HTTP_GET, [this](AsyncWebServerRequest* r) {
-        if (_fsReady && LittleFS.exists(FY_PREV_FILE)) {
-            r->send(LittleFS, FY_PREV_FILE, "application/json");
-        } else {
-            r->send(200, "application/json", "[]");
-        }
-    });
-
-    server.on("/api/flockyou/history/json", HTTP_GET, [this](AsyncWebServerRequest* r) {
-        if (_fsReady && LittleFS.exists(FY_PREV_FILE)) {
-            AsyncWebServerResponse* resp =
-                r->beginResponse(LittleFS, FY_PREV_FILE, "application/json");
-            resp->addHeader("Content-Disposition",
-                            "attachment; filename=\"flockyou_prev_session.json\"");
-            r->send(resp);
-        } else {
-            r->send(404, "application/json", "{\"error\":\"no prior session\"}");
-        }
-    });
-
-    server.on("/api/flockyou/clear", HTTP_GET, [this](AsyncWebServerRequest* r) {
-        saveSession();
-        if (_mutex && xSemaphoreTake(_mutex, pdMS_TO_TICKS(200)) == pdTRUE) {
-            _detCount = 0;
-            memset(_det, 0, sizeof(_det));
-            _triggered = false;
-            _deviceInRange = false;
-            xSemaphoreGive(_mutex);
-        }
-        r->send(200, "application/json", "{\"status\":\"cleared\"}");
-    });
-
-    Serial.println("[FLOCKYOU] Web routes registered");
+    registerFlockyouRoutes(server, *this);
 }
 
 bool FlockyouModule::isEnabled() {

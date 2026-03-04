@@ -15,6 +15,24 @@ class FoxhunterModule : public IDetectionModule, public hal::BLEListener {
     bool isEnabled() override;
     void setEnabled(bool enabled) override;
 
+    // Public accessors for route handlers
+    const String& targetMAC() const {
+        return _targetMAC;
+    }
+    bool targetDetected() const {
+        return _targetDetected;
+    }
+    int currentRSSI() const {
+        return _currentRSSI;
+    }
+    unsigned long lastTargetSeen() const {
+        return _lastTargetSeen;
+    }
+
+    // Public operations for route handlers
+    void setTarget(const String& mac);
+    void clearTarget();
+
   private:
     bool _enabled = true;
     String _targetMAC;
