@@ -112,6 +112,17 @@ jobs:
       - name: Build firmware
         run: pio run
 
+      - name: Check firmware size
+        run: |
+          FW=.pio/build/seeed_xiao_esp32s3/firmware.bin
+          SIZE=$(stat --printf="%s" "$FW")
+          MAX=2097152
+          echo "Firmware size: $SIZE bytes (max: $MAX)"
+          if [ "$SIZE" -gt "$MAX" ]; then
+            echo "::error::Firmware exceeds 2MB size budget ($SIZE > $MAX)"
+            exit 1
+          fi
+
       - name: Upload firmware artifacts
         uses: actions/upload-artifact@v4
         with:

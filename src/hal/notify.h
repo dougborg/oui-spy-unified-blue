@@ -10,21 +10,21 @@ namespace hal {
 
 enum NotifyEvent : uint8_t {
     // Detector
-    NOTIFY_DET_NEW_DEVICE,  // New device detected (3 beeps + cyan/mag/purple flash)
-    NOTIFY_DET_RE_3S,       // Re-detection after 3s (2 beeps + flash)
-    NOTIFY_DET_RE_30S,      // Re-detection after 30s (3 beeps + flash)
+    NOTIFY_DET_NEW_DEVICE, // New device detected (3 beeps + cyan/mag/purple flash)
+    NOTIFY_DET_RE_3S,      // Re-detection after 3s (2 beeps + flash)
+    NOTIFY_DET_RE_30S,     // Re-detection after 30s (3 beeps + flash)
     // Flockyou
-    NOTIFY_FY_ALERT,        // Flipper detection alert (crow alarm + red/pink flash)
-    NOTIFY_FY_HEARTBEAT,    // Device in range heartbeat (crow heartbeat + glow)
-    NOTIFY_FY_IDLE,         // Device out of range (return to idle breathing)
+    NOTIFY_FY_ALERT,     // Flipper detection alert (crow alarm + red/pink flash)
+    NOTIFY_FY_HEARTBEAT, // Device in range heartbeat (crow heartbeat + glow)
+    NOTIFY_FY_IDLE,      // Device out of range (return to idle breathing)
     // Skyspy
-    NOTIFY_SS_DRONE,        // Drone detected (3 rapid beeps)
-    NOTIFY_SS_HEARTBEAT,    // Drone in range heartbeat (double pulse)
+    NOTIFY_SS_DRONE,     // Drone detected (3 rapid beeps)
+    NOTIFY_SS_HEARTBEAT, // Drone in range heartbeat (double pulse)
     // Foxhunter
-    NOTIFY_FOX_ACQUIRED,    // Target first acquired (3 same-tone beeps)
+    NOTIFY_FOX_ACQUIRED, // Target first acquired (3 same-tone beeps)
     // Boot
-    NOTIFY_BOOT_READY,      // Boot complete (zelda jingle)
-    NOTIFY_BOOT_HOLD,       // Boot button held (ascending)
+    NOTIFY_BOOT_READY, // Boot complete (zelda jingle)
+    NOTIFY_BOOT_HOLD,  // Boot button held (ascending)
 };
 
 void notify(NotifyEvent event);
