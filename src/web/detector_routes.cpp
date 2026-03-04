@@ -47,10 +47,15 @@ void registerDetectorRoutes(AsyncWebServer& server, DetectorModule& mod) {
         r->send(200, "application/json", json);
     });
 
-    // Save alias
+    // Save alias (with length validation)
     server.on("/api/detector/alias", HTTP_POST, [&mod](AsyncWebServerRequest* r) {
         if (r->hasParam("mac", true) && r->hasParam("alias", true)) {
-            mod.setAlias(r->getParam("mac", true)->value(), r->getParam("alias", true)->value());
+            String alias = r->getParam("alias", true)->value();
+            if (alias.length() > 32) {
+                r->send(400, "application/json", "{\"error\":\"alias max 32 characters\"}");
+                return;
+            }
+            mod.setAlias(r->getParam("mac", true)->value(), alias);
             mod.saveAliases();
             r->send(200, "application/json", "{\"success\":true}");
         } else {

@@ -1,3 +1,4 @@
+#include "../modules/detector_logic.h"
 #include "../modules/foxhunter.h"
 #include "routes.h"
 #include <ESPAsyncWebServer.h>
@@ -13,10 +14,15 @@ void registerFoxhunterRoutes(AsyncWebServer& server, FoxhunterModule& mod) {
         r->send(200, "application/json", buf);
     });
 
-    // Set target MAC
+    // Set target MAC (with validation)
     server.on("/api/foxhunter/target", HTTP_POST, [&mod](AsyncWebServerRequest* r) {
         if (r->hasParam("mac", true)) {
             String mac = r->getParam("mac", true)->value();
+            mac.trim();
+            if (mac.length() > 0 && !detector_logic::isValidMac(mac.c_str())) {
+                r->send(400, "application/json", "{\"error\":\"invalid MAC format\"}");
+                return;
+            }
             mod.setTarget(mac);
             r->send(200, "application/json", "{\"target\":\"" + mod.targetMAC() + "\"}");
         } else {

@@ -105,14 +105,19 @@ void registerSystemRoutes(IModule** modules, int count) {
         if (r->hasParam("ssid", true)) {
             String ssid = r->getParam("ssid", true)->value();
             String pass = r->hasParam("pass", true) ? r->getParam("pass", true)->value() : "";
-            if (ssid.length() >= 1 && ssid.length() <= 32) {
-                storage::setAPConfig(ssid, pass);
-                r->send(200, "application/json", "{\"ok\":true,\"reboot\":true}");
-                delay(500);
-                ESP.restart();
-            } else {
-                r->send(400, "application/json", "{\"error\":\"invalid ssid\"}");
+            if (ssid.length() < 1 || ssid.length() > 32) {
+                r->send(400, "application/json", "{\"error\":\"SSID must be 1-32 characters\"}");
+                return;
             }
+            if (pass.length() > 0 && (pass.length() < 8 || pass.length() > 63)) {
+                r->send(400, "application/json",
+                        "{\"error\":\"Password must be 8-63 characters or empty for open\"}");
+                return;
+            }
+            storage::setAPConfig(ssid, pass);
+            r->send(200, "application/json", "{\"ok\":true,\"reboot\":true}");
+            delay(500);
+            ESP.restart();
         } else {
             r->send(400, "application/json", "{\"error\":\"missing ssid\"}");
         }
