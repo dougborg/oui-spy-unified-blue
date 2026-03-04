@@ -9,9 +9,9 @@ static bool _aggressive = false;
 static unsigned long _lastScanStart = 0;
 static bool _initialized = false;
 
-// Scan duration in seconds
-static const int SCAN_DURATION = 3;
-static const int SCAN_RESTART_MS = 3000;
+// Scan timing — must leave airtime for WiFi AP coexistence
+static const int SCAN_DURATION = 3;       // seconds per scan
+static const int SCAN_RESTART_MS = 4000;  // gap between scans
 
 // Dispatcher callback
 class DispatchCallbacks : public NimBLEAdvertisedDeviceCallbacks {
@@ -31,12 +31,13 @@ void bleInit() {
     NimBLEDevice::setPower(ESP_PWR_LVL_P9); // Max TX power
     _scan = NimBLEDevice::getScan();
     _scan->setAdvertisedDeviceCallbacks(&_callbacks, false);
-    _scan->setActiveScan(true);
+    _scan->setActiveScan(false); // Passive — saves radio time for WiFi coexistence
     _scan->setDuplicateFilter(false); // See every advertisement
 
-    // Default scan params (relaxed)
-    _scan->setInterval(100);
-    _scan->setWindow(99);
+    // Default scan params — ~70% BLE duty cycle
+    // Units are 0.625ms: interval=160 → 100ms, window=112 → 70ms
+    _scan->setInterval(160);
+    _scan->setWindow(112);
 
     _initialized = true;
     Serial.println("[HAL] BLE manager initialized");
@@ -60,13 +61,17 @@ void bleRequestAggressiveScan(bool aggressive) {
     _aggressive = aggressive;
     if (_scan) {
         if (_aggressive) {
-            _scan->setInterval(16);
-            _scan->setWindow(15);
-            Serial.println("[HAL] BLE scan: aggressive (16ms/15ms)");
+            // Scan-only mode (no WiFi AP) — max duty cycle is safe
+            _scan->setActiveScan(true);
+            _scan->setInterval(80);
+            _scan->setWindow(72);
+            Serial.println("[HAL] BLE scan: aggressive (50ms/45ms, active)");
         } else {
-            _scan->setInterval(100);
-            _scan->setWindow(99);
-            Serial.println("[HAL] BLE scan: normal (100ms/99ms)");
+            // Normal mode (WiFi AP active) — ~70% duty cycle
+            _scan->setActiveScan(false);
+            _scan->setInterval(160);
+            _scan->setWindow(112);
+            Serial.println("[HAL] BLE scan: normal (100ms/70ms, passive)");
         }
     }
 }

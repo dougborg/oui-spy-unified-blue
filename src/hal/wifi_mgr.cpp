@@ -1,5 +1,4 @@
 #include "wifi_mgr.h"
-#include "mac_util.h"
 
 namespace hal {
 
@@ -9,28 +8,25 @@ static bool _scanMode = false;
 static bool _scanInProgress = false;
 
 void wifiInit(const String& ssid, const String& password) {
-    // Clean WiFi state
-    WiFi.mode(WIFI_AP_STA);
-    delay(100);
-    esp_wifi_restore();
-    WiFi.softAPdisconnect(true);
-    WiFi.disconnect(true, true);
-    delay(100);
-
-    // Set AP+STA mode
-    WiFi.persistent(false);
-    WiFi.mode(WIFI_AP_STA);
+    // AP-only mode for normal operation (STA not needed — scan mode uses separate init)
+    WiFi.mode(WIFI_AP);
     delay(200);
 
-    // Start AP (default channel)
+    // Explicit IP/subnet config
+    WiFi.softAPConfig(IPAddress(192, 168, 4, 1), IPAddress(192, 168, 4, 1),
+                       IPAddress(255, 255, 255, 0));
+
+    // Start AP on channel 1
     bool ok;
     if (password.length() >= 8) {
-        ok = WiFi.softAP(ssid.c_str(), password.c_str());
-        Serial.printf("[HAL] WiFi AP '%s' (WPA2): %s\n", ssid.c_str(), ok ? "OK" : "FAILED");
+        ok = WiFi.softAP(ssid.c_str(), password.c_str(), 1, 0, 4);
+        Serial.printf("[HAL] WiFi AP '%s' ch1 (WPA2): %s\n", ssid.c_str(), ok ? "OK" : "FAILED");
     } else {
-        ok = WiFi.softAP(ssid.c_str());
-        Serial.printf("[HAL] WiFi AP '%s' (OPEN): %s\n", ssid.c_str(), ok ? "OK" : "FAILED");
+        ok = WiFi.softAP(ssid.c_str(), NULL, 1, 0, 4);
+        Serial.printf("[HAL] WiFi AP '%s' ch1 (OPEN): %s\n", ssid.c_str(), ok ? "OK" : "FAILED");
     }
+
+    delay(500); // Let DHCP server settle
 
     Serial.printf("[HAL] AP IP: %s\n", WiFi.softAPIP().toString().c_str());
     _apRunning = ok;

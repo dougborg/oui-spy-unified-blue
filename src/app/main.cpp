@@ -128,8 +128,9 @@ static void setupScanMode() {
     // WiFi: STA-only (no AP)
     hal::wifiInitScanMode();
 
-    // BLE init
+    // BLE init — aggressive scanning (no WiFi AP to share radio with)
     hal::bleInit();
+    hal::bleRequestAggressiveScan(true);
 
     // Only Sky Spy module in scan mode
     modSkyspy.setEnabled(true);
