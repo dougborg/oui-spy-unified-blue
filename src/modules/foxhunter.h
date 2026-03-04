@@ -16,7 +16,7 @@ class FoxhunterModule : public IModule, public hal::BLEListener {
     void setEnabled(bool enabled) override;
 
     // hal::BLEListener
-    void onBLEAdvertisement(NimBLEAdvertisedDevice* device) override;
+    void onBLEAdvertisement(const NimBLEAdvertisedDevice* device) override;
 
     // Public accessors for route handlers
     const String& targetMAC() const {

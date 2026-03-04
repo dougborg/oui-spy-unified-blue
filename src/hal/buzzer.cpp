@@ -23,17 +23,14 @@ static int _proxRSSI = -100;
 static bool _proxBeeping = false;
 static unsigned long _proxLastBeep = 0;
 
-// LEDC channel for buzzer (Arduino-ESP32 core 2.x API)
-#define BUZZER_LEDC_CH 0
-
 // Helper: play a tone for a duration (non-blocking step)
 static void toneOn(int freq) {
-    ledcWriteTone(BUZZER_LEDC_CH, freq);
-    ledcWrite(BUZZER_LEDC_CH, 127);
+    ledcWriteTone(BUZZER_PIN, freq);
+    ledcWrite(BUZZER_PIN, 127);
 }
 
 static void toneOff() {
-    ledcWrite(BUZZER_LEDC_CH, 0);
+    ledcWrite(BUZZER_PIN, 0);
 }
 
 // ============================================================================
@@ -43,9 +40,8 @@ static void toneOff() {
 void buzzerInit() {
     pinMode(BUZZER_PIN, OUTPUT);
     digitalWrite(BUZZER_PIN, LOW);
-    ledcSetup(BUZZER_LEDC_CH, 1000, 8);
-    ledcAttachPin(BUZZER_PIN, BUZZER_LEDC_CH);
-    ledcWrite(BUZZER_LEDC_CH, 0);
+    ledcAttach(BUZZER_PIN, 1000, 8);
+    ledcWrite(BUZZER_PIN, 0);
 
     _enabled = storage::getBuzzerEnabled();
     Serial.printf("[HAL] Buzzer: %s\n", _enabled ? "ON" : "OFF");

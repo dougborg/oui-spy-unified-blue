@@ -26,7 +26,7 @@ static SkySpyModule* ssInstance = nullptr;
 // Helpers
 // ============================================================================
 
-SSUavData* SkySpyModule::nextUav(uint8_t* mac) {
+SSUavData* SkySpyModule::nextUav(const uint8_t* mac) {
     for (int i = 0; i < SS_MAX_UAVS; i++) {
         if (memcmp(_uavs[i].mac, mac, 6) == 0)
             return &_uavs[i];
@@ -238,20 +238,20 @@ void SkySpyModule::loop() {
     }
 }
 
-void SkySpyModule::onBLEAdvertisement(NimBLEAdvertisedDevice* device) {
+void SkySpyModule::onBLEAdvertisement(const NimBLEAdvertisedDevice* device) {
     if (!_enabled)
         return;
 
-    int len = device->getPayloadLength();
+    const std::vector<uint8_t>& payload = device->getPayload();
+    int len = (int)payload.size();
     if (len < 6)
         return;
 
-    uint8_t* payload = device->getPayload();
     // Check for ODID BLE service UUID signature
     if (!(payload[1] == 0x16 && payload[2] == 0xFA && payload[3] == 0xFF && payload[4] == 0x0D))
         return;
 
-    uint8_t* mac = (uint8_t*)device->getAddress().getNative();
+    const uint8_t* mac = device->getAddress().getVal();
     if (!_mutex || xSemaphoreTake(_mutex, pdMS_TO_TICKS(50)) != pdTRUE)
         return;
 
@@ -260,7 +260,7 @@ void SkySpyModule::onBLEAdvertisement(NimBLEAdvertisedDevice* device) {
     uav->rssi = device->getRSSI();
     memcpy(uav->mac, mac, 6);
 
-    uint8_t* odid = &payload[6];
+    const uint8_t* odid = payload.data() + 6;
     switch (odid[0] & 0xF0) {
     case 0x00: {
         ODID_BasicID_data basic;

@@ -14,7 +14,7 @@ namespace hal {
 class BLEListener {
   public:
     virtual ~BLEListener() = default;
-    virtual void onBLEAdvertisement(NimBLEAdvertisedDevice* device) = 0;
+    virtual void onBLEAdvertisement(const NimBLEAdvertisedDevice* device) = 0;
 };
 
 void bleInit();

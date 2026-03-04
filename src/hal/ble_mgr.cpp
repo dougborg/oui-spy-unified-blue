@@ -10,12 +10,12 @@ static unsigned long _lastScanStart = 0;
 static bool _initialized = false;
 
 // Scan timing — must leave airtime for WiFi AP coexistence
-static const int SCAN_DURATION = 3;       // seconds per scan
+static const int SCAN_DURATION = 3000;    // milliseconds per scan
 static const int SCAN_RESTART_MS = 4000;  // gap between scans
 
 // Dispatcher callback
-class DispatchCallbacks : public NimBLEAdvertisedDeviceCallbacks {
-    void onResult(NimBLEAdvertisedDevice* device) override {
+class DispatchCallbacks : public NimBLEScanCallbacks {
+    void onResult(const NimBLEAdvertisedDevice* device) override {
         for (auto* listener : _listeners) {
             listener->onBLEAdvertisement(device);
         }
@@ -28,9 +28,9 @@ void bleInit() {
     if (_initialized)
         return;
     NimBLEDevice::init("");
-    NimBLEDevice::setPower(ESP_PWR_LVL_P9); // Max TX power
+    NimBLEDevice::setPower(9); // Max TX power
     _scan = NimBLEDevice::getScan();
-    _scan->setAdvertisedDeviceCallbacks(&_callbacks, false);
+    _scan->setScanCallbacks(&_callbacks, false);
     _scan->setActiveScan(false); // Passive — saves radio time for WiFi coexistence
     _scan->setDuplicateFilter(false); // See every advertisement
 
@@ -90,8 +90,7 @@ void bleUpdate() {
 
     // Restart scan if not scanning and interval elapsed
     if (!_scan->isScanning() && (now - _lastScanStart >= SCAN_RESTART_MS)) {
-        _scan->clearResults();
-        _scan->start(SCAN_DURATION, nullptr, false);
+        _scan->start(SCAN_DURATION, false);
         _lastScanStart = now;
     }
 }

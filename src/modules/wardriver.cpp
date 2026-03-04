@@ -187,7 +187,7 @@ void WardriverModule::loop() {
     }
 }
 
-void WardriverModule::onBLEAdvertisement(NimBLEAdvertisedDevice* device) {
+void WardriverModule::onBLEAdvertisement(const NimBLEAdvertisedDevice* device) {
     if (!_enabled || !_sessionActive)
         return;
 

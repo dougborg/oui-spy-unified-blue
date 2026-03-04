@@ -63,7 +63,7 @@ static bool fyCheckMfr(uint16_t id) {
                                                sizeof(fyMfrIDs) / sizeof(fyMfrIDs[0]));
 }
 
-static bool fyCheckRaven(NimBLEAdvertisedDevice* dev) {
+static bool fyCheckRaven(const NimBLEAdvertisedDevice* dev) {
     if (!dev || !dev->haveServiceUUID())
         return false;
     int count = dev->getServiceUUIDCount();
@@ -76,7 +76,7 @@ static bool fyCheckRaven(NimBLEAdvertisedDevice* dev) {
     return false;
 }
 
-static const char* fyEstimateRavenFW(NimBLEAdvertisedDevice* dev) {
+static const char* fyEstimateRavenFW(const NimBLEAdvertisedDevice* dev) {
     if (!dev || !dev->haveServiceUUID())
         return "?";
     bool hasNewGPS = false, hasOldLoc = false, hasPower = false;
@@ -305,7 +305,7 @@ void FlockyouModule::loop() {
     }
 }
 
-void FlockyouModule::onBLEAdvertisement(NimBLEAdvertisedDevice* dev) {
+void FlockyouModule::onBLEAdvertisement(const NimBLEAdvertisedDevice* dev) {
     if (!_enabled)
         return;
 

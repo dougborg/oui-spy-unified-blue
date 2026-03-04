@@ -215,11 +215,8 @@ static esp_err_t handleReset(httpd_req_t* req) {
 void serverInit() {
     // --- HTTPS Server on :443 ---
     httpd_ssl_config_t httpsConfig = HTTPD_SSL_CONFIG_DEFAULT();
-    // Note: in this ESP-IDF version (pre-5.x), cacert_pem serves as the server
-    // certificate (not for client verification). Newer ESP-IDF has a separate
-    // servercert field and repurposes cacert_pem for mutual TLS.
-    httpsConfig.cacert_pem = DEV_CERT_PEM;
-    httpsConfig.cacert_len = DEV_CERT_PEM_LEN;
+    httpsConfig.servercert = DEV_CERT_PEM;
+    httpsConfig.servercert_len = DEV_CERT_PEM_LEN;
     httpsConfig.prvtkey_pem = DEV_KEY_PEM;
     httpsConfig.prvtkey_len = DEV_KEY_PEM_LEN;
     httpsConfig.httpd.max_uri_handlers = 55;

@@ -35,9 +35,7 @@ function usePhoneGPS() {
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
         const { latitude, longitude, accuracy } = pos.coords;
-        fetchJSON(`/api/gps/set?lat=${latitude}&lon=${longitude}&acc=${accuracy}`).catch(
-          () => {},
-        );
+        fetchJSON(`/api/gps/set?lat=${latitude}&lon=${longitude}&acc=${accuracy}`).catch(() => {});
       },
       () => {},
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 },

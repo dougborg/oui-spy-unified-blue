@@ -24,6 +24,8 @@ RUN apt-get update \
 
 USER vscode
 
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+
 RUN python3 -m venv /home/vscode/.venv/pio \
     && /home/vscode/.venv/pio/bin/pip install --upgrade pip \
     && /home/vscode/.venv/pio/bin/pip install platformio esptool pyserial
