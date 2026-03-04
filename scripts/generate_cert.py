@@ -171,12 +171,13 @@ def generate_certs():
         f.write(dev_cert_pem)
 
     # --- Write C headers ---
+    # PEM data must be null-terminated for mbedTLS (it uses strlen internally)
     with open(CA_CERT_PEM_H, "w") as f:
-        f.write(bytes_to_c_array(ca_cert_pem, "CA_CERT_PEM", "CA_CERT_PEM_H"))
+        f.write(bytes_to_c_array(ca_cert_pem + b"\x00", "CA_CERT_PEM", "CA_CERT_PEM_H"))
     with open(DEV_CERT_PEM_H, "w") as f:
-        f.write(bytes_to_c_array(dev_cert_pem, "DEV_CERT_PEM", "DEV_CERT_PEM_H"))
+        f.write(bytes_to_c_array(dev_cert_pem + b"\x00", "DEV_CERT_PEM", "DEV_CERT_PEM_H"))
     with open(DEV_KEY_PEM_H, "w") as f:
-        f.write(bytes_to_c_array(dev_key_pem, "DEV_KEY_PEM", "DEV_KEY_PEM_H"))
+        f.write(bytes_to_c_array(dev_key_pem + b"\x00", "DEV_KEY_PEM", "DEV_KEY_PEM_H"))
     with open(CA_CERT_DER_H, "w") as f:
         f.write(bytes_to_c_array(ca_cert_der, "CA_CERT_DER", "CA_CERT_DER_H"))
 

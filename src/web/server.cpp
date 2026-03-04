@@ -149,6 +149,24 @@ static esp_err_t handleGPS(httpd_req_t* req) {
     return sendJSON(req, 200, json.c_str());
 }
 
+// GPS set (from phone browser geolocation)
+static esp_err_t handleGPSSet(httpd_req_t* req) {
+    const hal::GPSData& g = hal::gpsGet();
+    if (g.hwFix)
+        return sendJSON(req, 200, "{\"status\":\"ignored\",\"reason\":\"hw_gps_active\"}");
+
+    String lat, lon, acc;
+    if (!getQueryParam(req, "lat", lat) || !getQueryParam(req, "lon", lon))
+        return sendError(req, 400, "lat,lon required");
+
+    float accVal = 0;
+    if (getQueryParam(req, "acc", acc))
+        accVal = acc.toFloat();
+
+    hal::gpsSetFromPhone(lat.toDouble(), lon.toDouble(), accVal);
+    return sendJSON(req, 200, "{\"status\":\"ok\"}");
+}
+
 // AP settings GET
 static esp_err_t handleAPGet(httpd_req_t* req) {
     JsonDocument doc;
@@ -204,8 +222,9 @@ void serverInit() {
     httpsConfig.cacert_len = DEV_CERT_PEM_LEN;
     httpsConfig.prvtkey_pem = DEV_KEY_PEM;
     httpsConfig.prvtkey_len = DEV_KEY_PEM_LEN;
-    httpsConfig.httpd.max_uri_handlers = 40;
-    httpsConfig.httpd.stack_size = 8192;
+    httpsConfig.httpd.max_uri_handlers = 55;
+    httpsConfig.httpd.max_open_sockets = 4;  // Concurrent TLS sessions for connection reuse
+    httpsConfig.httpd.stack_size = 10240;    // TLS handshake needs more stack than plain HTTP
     httpsConfig.httpd.lru_purge_enable = true;
 
     esp_err_t ret = httpd_ssl_start(&_httpsServer, &httpsConfig);
@@ -217,7 +236,8 @@ void serverInit() {
 
     // --- HTTP Server on :80 ---
     httpd_config_t httpConfig = HTTPD_DEFAULT_CONFIG();
-    httpConfig.max_uri_handlers = 40;
+    httpConfig.ctrl_port = 32769; // Must differ from HTTPS server's ctrl_port (32768)
+    httpConfig.max_uri_handlers = 55;
     httpConfig.stack_size = 8192;
     httpConfig.lru_purge_enable = true;
 
@@ -234,18 +254,14 @@ void serverInit() {
     regBoth(&caCerUri);
     regBoth(&caPemUri);
 
-    // --- HTTPS: serve full SPA dashboard on / ---
-    if (_httpsServer) {
-        static const httpd_uri_t dashUri = {"/", HTTP_GET, handleDashboard, nullptr};
-        httpd_register_uri_handler(_httpsServer, &dashUri);
-    }
+    // --- Dashboard on BOTH servers ---
+    // HTTP: fast, no TLS overhead — default for most use
+    // HTTPS: slower but enables browser geolocation API (secure context)
+    static const httpd_uri_t dashUri = {"/", HTTP_GET, handleDashboard, nullptr};
+    regBoth(&dashUri);
 
-    // --- HTTP: captive portal welcome page on / and detection URLs ---
+    // --- HTTP: captive portal detection URLs (welcome page for mini-browsers) ---
     if (_httpServer) {
-        static const httpd_uri_t welcomeUri = {"/", HTTP_GET, handleWelcome, nullptr};
-        httpd_register_uri_handler(_httpServer, &welcomeUri);
-
-        // Captive portal detection URLs
         static const httpd_uri_t gen204 = {"/generate_204", HTTP_GET, handleCaptiveDetect, nullptr};
         static const httpd_uri_t hotspot = {"/hotspot-detect.html", HTTP_GET, handleCaptiveDetect,
                                             nullptr};
@@ -276,6 +292,7 @@ void registerSystemRoutes(IModule** modules, int count) {
                                           nullptr};
     static const httpd_uri_t buzzerUri = {"/api/buzzer", HTTP_POST, handleBuzzer, nullptr};
     static const httpd_uri_t gpsUri = {"/api/gps", HTTP_GET, handleGPS, nullptr};
+    static const httpd_uri_t gpsSetUri = {"/api/gps/set", HTTP_GET, handleGPSSet, nullptr};
     static const httpd_uri_t apGetUri = {"/api/ap", HTTP_GET, handleAPGet, nullptr};
     static const httpd_uri_t apPostUri = {"/api/ap", HTTP_POST, handleAPPost, nullptr};
     static const httpd_uri_t resetUri = {"/api/reset", HTTP_POST, handleReset, nullptr};
@@ -285,6 +302,7 @@ void registerSystemRoutes(IModule** modules, int count) {
     regBoth(&toggleUri);
     regBoth(&buzzerUri);
     regBoth(&gpsUri);
+    regBoth(&gpsSetUri);
     regBoth(&apGetUri);
     regBoth(&apPostUri);
     regBoth(&resetUri);

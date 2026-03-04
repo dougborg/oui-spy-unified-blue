@@ -49,24 +49,6 @@ static esp_err_t handleFYStats(httpd_req_t* req) {
     return web::sendJSON(req, 200, json.c_str());
 }
 
-// GPS submit (query params)
-static esp_err_t handleFYGPS(httpd_req_t* req) {
-    const hal::GPSData& g = hal::gpsGet();
-    if (g.hwFix)
-        return web::sendJSON(req, 200, "{\"status\":\"ignored\",\"reason\":\"hw_gps_active\"}");
-
-    String lat, lon, acc;
-    if (!web::getQueryParam(req, "lat", lat) || !web::getQueryParam(req, "lon", lon))
-        return web::sendError(req, 400, "lat,lon required");
-
-    float accVal = 0;
-    if (web::getQueryParam(req, "acc", acc))
-        accVal = acc.toFloat();
-
-    hal::gpsSetFromPhone(lat.toDouble(), lon.toDouble(), accVal);
-    return web::sendJSON(req, 200, "{\"status\":\"ok\"}");
-}
-
 // Patterns (chunked streaming)
 static esp_err_t handleFYPatterns(httpd_req_t* req) {
     web::ChunkedPrint print(req, "application/json");
@@ -123,7 +105,6 @@ void registerFlockyouRoutes(httpd_handle_t https, httpd_handle_t http, FlockyouM
     static const httpd_uri_t detectionsUri = {"/api/flockyou/detections", HTTP_GET,
                                               handleFYDetections, nullptr};
     static const httpd_uri_t statsUri = {"/api/flockyou/stats", HTTP_GET, handleFYStats, nullptr};
-    static const httpd_uri_t gpsUri = {"/api/flockyou/gps", HTTP_GET, handleFYGPS, nullptr};
     static const httpd_uri_t patternsUri = {"/api/flockyou/patterns", HTTP_GET, handleFYPatterns,
                                             nullptr};
     static const httpd_uri_t exportJsonUri = {"/api/flockyou/export/json", HTTP_GET,
@@ -140,7 +121,6 @@ void registerFlockyouRoutes(httpd_handle_t https, httpd_handle_t http, FlockyouM
 
     web::registerOnBoth(https, http, &detectionsUri);
     web::registerOnBoth(https, http, &statsUri);
-    web::registerOnBoth(https, http, &gpsUri);
     web::registerOnBoth(https, http, &patternsUri);
     web::registerOnBoth(https, http, &exportJsonUri);
     web::registerOnBoth(https, http, &exportCsvUri);

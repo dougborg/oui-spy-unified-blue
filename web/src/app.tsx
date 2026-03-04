@@ -35,7 +35,7 @@ function usePhoneGPS() {
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
         const { latitude, longitude, accuracy } = pos.coords;
-        fetchJSON(`/api/flockyou/gps?lat=${latitude}&lon=${longitude}&acc=${accuracy}`).catch(
+        fetchJSON(`/api/gps/set?lat=${latitude}&lon=${longitude}&acc=${accuracy}`).catch(
           () => {},
         );
       },
