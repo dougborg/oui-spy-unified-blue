@@ -20,6 +20,3 @@ class IModule {
     // Route registration (modules delegate to free functions in src/web/)
     virtual void registerRoutes(AsyncWebServer& server) = 0;
 };
-
-// Back-compat alias during transition
-using IDetectionModule = IModule;

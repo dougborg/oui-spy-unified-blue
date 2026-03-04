@@ -4,7 +4,6 @@
 #include "../hal/notify.h"
 #include "../web/routes.h"
 #include "flockyou_logic.h"
-#include <ArduinoJson.h>
 #include <LittleFS.h>
 #include <NimBLEDevice.h>
 #include <Preferences.h>
