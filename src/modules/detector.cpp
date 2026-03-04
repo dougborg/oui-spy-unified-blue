@@ -1,7 +1,6 @@
 #include "detector.h"
-#include "../hal/buzzer.h"
 #include "../hal/led.h"
-#include "../hal/neopixel.h"
+#include "../hal/notify.h"
 #include "../storage/nvs_store.h"
 #include "../web/routes.h"
 #include "detector_logic.h"
@@ -211,8 +210,7 @@ void DetectorModule::onBLEAdvertisement(NimBLEAdvertisedDevice* device) {
                 _matchFilter = matchedDesc;
                 _matchType = "RE-30s";
                 _newMatch = true;
-                hal::buzzerPlay(hal::SND_THREE_BEEPS);
-                hal::neopixelFlash(240, 300, 270);
+                hal::notify(hal::NOTIFY_DET_RE_30S);
                 dev.inCooldown = true;
                 dev.cooldownUntil = now + 10000;
             } else if (sinceLast >= 3000) {
@@ -221,8 +219,7 @@ void DetectorModule::onBLEAdvertisement(NimBLEAdvertisedDevice* device) {
                 _matchFilter = matchedDesc;
                 _matchType = "RE-3s";
                 _newMatch = true;
-                hal::buzzerPlay(hal::SND_TWO_BEEPS);
-                hal::neopixelFlash(240, 300, 270);
+                hal::notify(hal::NOTIFY_DET_RE_3S);
                 dev.inCooldown = true;
                 dev.cooldownUntil = now + 3000;
             }
@@ -248,8 +245,7 @@ void DetectorModule::onBLEAdvertisement(NimBLEAdvertisedDevice* device) {
     _matchFilter = matchedDesc;
     _matchType = "NEW";
     _newMatch = true;
-    hal::buzzerPlay(hal::SND_THREE_BEEPS);
-    hal::neopixelFlash(240, 300, 270);
+    hal::notify(hal::NOTIFY_DET_NEW_DEVICE);
 }
 
 // ============================================================================

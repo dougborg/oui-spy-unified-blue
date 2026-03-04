@@ -1,7 +1,7 @@
 #include "flockyou.h"
-#include "../hal/buzzer.h"
 #include "../hal/gps.h"
 #include "../hal/neopixel.h"
+#include "../hal/notify.h"
 #include "../web/routes.h"
 #include "flockyou_logic.h"
 #include <ArduinoJson.h>
@@ -284,14 +284,13 @@ void FlockyouModule::loop() {
     // Heartbeat tracking
     if (_deviceInRange) {
         if (millis() - _lastHB >= 10000) {
-            hal::buzzerPlay(hal::SND_CROW_HEARTBEAT);
-            hal::neopixelSetState(hal::NEO_HEARTBEAT_GLOW, 300);
+            hal::notify(hal::NOTIFY_FY_HEARTBEAT);
             _lastHB = millis();
         }
         if (millis() - _lastDetTime >= 30000) {
             _deviceInRange = false;
             _triggered = false;
-            hal::neopixelSetState(hal::NEO_IDLE_BREATHING);
+            hal::notify(hal::NOTIFY_FY_IDLE);
         }
     }
 
@@ -388,8 +387,7 @@ void FlockyouModule::onBLEAdvertisement(NimBLEAdvertisedDevice* dev) {
 
     if (!_triggered) {
         _triggered = true;
-        hal::buzzerPlay(hal::SND_CROW_ALARM);
-        hal::neopixelFlash(0, 300, 0); // red-pink-red
+        hal::notify(hal::NOTIFY_FY_ALERT);
     }
     _deviceInRange = true;
     _lastDetTime = millis();

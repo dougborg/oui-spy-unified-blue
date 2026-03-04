@@ -1,6 +1,6 @@
 #include "skyspy.h"
-#include "../hal/buzzer.h"
 #include "../hal/led.h"
+#include "../hal/notify.h"
 #include "../hal/wifi_mgr.h"
 #include "../web/routes.h"
 #include "odid_wifi.h"
@@ -67,7 +67,7 @@ void SkySpyModule::triggerDetection() {
     if (!_deviceInRange) {
         _deviceInRange = true;
         _lastHeartbeat = millis();
-        hal::buzzerPlay(hal::SND_DRONE_DETECT);
+        hal::notify(hal::NOTIFY_SS_DRONE);
         Serial.println("[SKYSPY] Drone detected!");
     }
 }
@@ -185,7 +185,7 @@ void SkySpyModule::loop() {
     // Heartbeat pulse if drone in range
     if (_deviceInRange) {
         if (now - _lastHeartbeat >= 5000) {
-            hal::buzzerPlay(hal::SND_DRONE_HEARTBEAT);
+            hal::notify(hal::NOTIFY_SS_HEARTBEAT);
             _lastHeartbeat = now;
         }
         // Check if all drones out of range (7s timeout)

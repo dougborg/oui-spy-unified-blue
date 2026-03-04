@@ -2,7 +2,7 @@
 #include "../hal/ble_mgr.h"
 #include "../hal/buzzer.h"
 #include "../hal/led.h"
-#include "../hal/neopixel.h"
+#include "../hal/notify.h"
 #include "../storage/nvs_store.h"
 #include "../web/routes.h"
 
@@ -75,7 +75,7 @@ void FoxhunterModule::onBLEAdvertisement(NimBLEAdvertisedDevice* device) {
         if (!_targetDetected) {
             _targetDetected = true;
             if (_sessionFirstDetection) {
-                hal::buzzerPlay(hal::SND_FOX_FIRST);
+                hal::notify(hal::NOTIFY_FOX_ACQUIRED);
                 _sessionFirstDetection = false;
                 Serial.println("{\"module\":\"foxhunter\",\"status\":\"target_acquired\"}");
             }

@@ -17,6 +17,7 @@
 #include "hal/led.h"
 #include "hal/mac_util.h"
 #include "hal/neopixel.h"
+#include "hal/notify.h"
 #include "hal/pins.h"
 #include "hal/wifi_mgr.h"
 
@@ -66,7 +67,7 @@ static void checkBootButton() {
             bootBtnStart = millis();
         } else if (millis() - bootBtnStart >= BOOT_HOLD_TIME) {
             Serial.println("\n[OUI-SPY] Boot button held — restarting...");
-            hal::buzzerPlay(hal::SND_ASCENDING);
+            hal::notify(hal::NOTIFY_BOOT_HOLD);
             delay(500);
             ESP.restart();
         }
@@ -160,7 +161,7 @@ void setup() {
     hal::bleUpdate(); // Kick off first scan
 
     // ---- Boot Jingle ----
-    hal::buzzerPlay(hal::SND_ZELDA_SECRET);
+    hal::notify(hal::NOTIFY_BOOT_READY);
 
     Serial.println("\n========================================");
     Serial.printf("  WiFi AP: %s\n", ssid.c_str());
