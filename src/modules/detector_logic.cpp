@@ -47,4 +47,20 @@ bool matchesFilter(const std::string& deviceMac, const std::string& filterIdenti
     return normalizedDevice.rfind(normalizedFilter, 0) == 0;
 }
 
+CooldownResult evaluateCooldown(bool inCooldown, uint32_t cooldownUntil, uint32_t lastSeen,
+                                uint32_t now) {
+    if (inCooldown && now < cooldownUntil)
+        return {DetectionType::IN_COOLDOWN, 0};
+
+    uint32_t sinceLast = now - lastSeen;
+
+    if (sinceLast >= 30000)
+        return {DetectionType::RE_30S, 10000};
+
+    if (sinceLast >= 3000)
+        return {DetectionType::RE_3S, 3000};
+
+    return {DetectionType::TOO_RECENT, 0};
+}
+
 } // namespace detector_logic

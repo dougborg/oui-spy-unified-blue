@@ -6,6 +6,8 @@
 #include "hal/neopixel_logic.h"
 #include "modules/detector_logic.h"
 #include "modules/flockyou_logic.h"
+#include "modules/foxhunter_logic.h"
+#include "modules/skyspy_logic.h"
 
 extern "C" {
 #include "opendroneid.h"
@@ -276,6 +278,241 @@ void test_neopixel_logic_breathing_and_flash() {
     TEST_ASSERT_FALSE(done.active);
 }
 
+// ============================================================================
+// Detector Cooldown Logic Tests
+// ============================================================================
+
+void test_detector_cooldown_in_cooldown() {
+    auto r = detector_logic::evaluateCooldown(true, 5000, 1000, 3000);
+    TEST_ASSERT_EQUAL_INT((int)detector_logic::DetectionType::IN_COOLDOWN, (int)r.type);
+}
+
+void test_detector_cooldown_expired_re30s() {
+    // Cooldown expired, last seen 35s ago
+    auto r = detector_logic::evaluateCooldown(true, 2000, 1000, 36000);
+    TEST_ASSERT_EQUAL_INT((int)detector_logic::DetectionType::RE_30S, (int)r.type);
+    TEST_ASSERT_EQUAL_UINT32(10000, r.newCooldownMs);
+}
+
+void test_detector_cooldown_re3s() {
+    // No cooldown, last seen 5s ago
+    auto r = detector_logic::evaluateCooldown(false, 0, 1000, 6000);
+    TEST_ASSERT_EQUAL_INT((int)detector_logic::DetectionType::RE_3S, (int)r.type);
+    TEST_ASSERT_EQUAL_UINT32(3000, r.newCooldownMs);
+}
+
+void test_detector_cooldown_too_recent() {
+    // Last seen 1s ago
+    auto r = detector_logic::evaluateCooldown(false, 0, 5000, 6000);
+    TEST_ASSERT_EQUAL_INT((int)detector_logic::DetectionType::TOO_RECENT, (int)r.type);
+}
+
+// ============================================================================
+// Foxhunter Proximity Logic Tests
+// ============================================================================
+
+void test_foxhunter_prox_not_detected() {
+    auto r = foxhunter_logic::evaluateProxTick(false, 10000, 5000, 0);
+    TEST_ASSERT_EQUAL_INT((int)foxhunter_logic::ProxEvent::NONE, (int)r.event);
+    TEST_ASSERT_FALSE(r.shouldBeep);
+    TEST_ASSERT_FALSE(r.shouldPrintRSSI);
+}
+
+void test_foxhunter_prox_in_range_beep() {
+    // Target detected 2s ago, last RSSI print 3s ago
+    auto r = foxhunter_logic::evaluateProxTick(true, 10000, 8000, 7000);
+    TEST_ASSERT_EQUAL_INT((int)foxhunter_logic::ProxEvent::NONE, (int)r.event);
+    TEST_ASSERT_TRUE(r.shouldBeep);
+    TEST_ASSERT_TRUE(r.shouldPrintRSSI);
+}
+
+void test_foxhunter_prox_in_range_no_print() {
+    // Target detected 1s ago, last RSSI print 1s ago (too recent)
+    auto r = foxhunter_logic::evaluateProxTick(true, 10000, 9000, 9000);
+    TEST_ASSERT_TRUE(r.shouldBeep);
+    TEST_ASSERT_FALSE(r.shouldPrintRSSI);
+}
+
+void test_foxhunter_prox_target_lost() {
+    // Target detected 6s ago (>5s timeout)
+    auto r = foxhunter_logic::evaluateProxTick(true, 11000, 5000, 0);
+    TEST_ASSERT_EQUAL_INT((int)foxhunter_logic::ProxEvent::TARGET_LOST, (int)r.event);
+    TEST_ASSERT_FALSE(r.shouldBeep);
+}
+
+void test_foxhunter_target_match_no_match() {
+    auto r = foxhunter_logic::evaluateTargetMatch("AA:BB:CC:DD:EE:FF", "11:22:33:44:55:66", false,
+                                                   true);
+    TEST_ASSERT_EQUAL_INT((int)foxhunter_logic::TargetMatchEvent::NO_MATCH, (int)r);
+}
+
+void test_foxhunter_target_match_first_acquisition() {
+    auto r = foxhunter_logic::evaluateTargetMatch("AA:BB:CC:DD:EE:FF", "aa:bb:cc:dd:ee:ff", false,
+                                                   true);
+    TEST_ASSERT_EQUAL_INT((int)foxhunter_logic::TargetMatchEvent::FIRST_ACQUISITION, (int)r);
+}
+
+void test_foxhunter_target_match_reacquired() {
+    auto r = foxhunter_logic::evaluateTargetMatch("AA:BB:CC:DD:EE:FF", "aa:bb:cc:dd:ee:ff", false,
+                                                   false);
+    TEST_ASSERT_EQUAL_INT((int)foxhunter_logic::TargetMatchEvent::REACQUIRED, (int)r);
+}
+
+void test_foxhunter_target_match_update_existing() {
+    auto r = foxhunter_logic::evaluateTargetMatch("AA:BB:CC:DD:EE:FF", "aa:bb:cc:dd:ee:ff", true,
+                                                   false);
+    TEST_ASSERT_EQUAL_INT((int)foxhunter_logic::TargetMatchEvent::UPDATE_EXISTING, (int)r);
+}
+
+void test_foxhunter_target_match_null_target() {
+    auto r = foxhunter_logic::evaluateTargetMatch("AA:BB:CC:DD:EE:FF", "", false, true);
+    TEST_ASSERT_EQUAL_INT((int)foxhunter_logic::TargetMatchEvent::NO_MATCH, (int)r);
+}
+
+// ============================================================================
+// SkySpy Logic Tests
+// ============================================================================
+
+void test_skyspy_is_odid_vendor_ie() {
+    uint8_t ie1[] = {0x90, 0x3a, 0xe6, 0x00, 0x01};
+    TEST_ASSERT_TRUE(skyspy_logic::isOdidVendorIE(ie1, 5));
+
+    uint8_t ie2[] = {0xfa, 0x0b, 0xbc, 0x00, 0x01};
+    TEST_ASSERT_TRUE(skyspy_logic::isOdidVendorIE(ie2, 5));
+
+    uint8_t ie3[] = {0x00, 0x00, 0x00, 0x00, 0x01};
+    TEST_ASSERT_FALSE(skyspy_logic::isOdidVendorIE(ie3, 5));
+
+    TEST_ASSERT_FALSE(skyspy_logic::isOdidVendorIE(ie1, 2)); // too short
+}
+
+void test_skyspy_find_odid_beacon_ie() {
+    // Build a minimal beacon-like payload with a vendor IE at offset 36
+    uint8_t payload[60] = {0};
+    payload[0] = 0x80; // beacon frame type
+    // IE at offset 36: type=0xdd, len=10, OUI=90:3a:e6, type+counter=2 bytes, then data
+    payload[36] = 0xdd;
+    payload[37] = 10;           // IE length
+    payload[38] = 0x90;         // OUI byte 1
+    payload[39] = 0x3a;         // OUI byte 2
+    payload[40] = 0xe6;         // OUI byte 3
+    payload[41] = 0x01;         // type
+    payload[42] = 0x00;         // counter
+    payload[43] = 0xAA;         // ODID data starts here (offset 43 = 36+7)
+
+    int odid_len = 0;
+    int result = skyspy_logic::findOdidBeaconIE(payload, 48, 36, &odid_len);
+    TEST_ASSERT_EQUAL_INT(43, result);
+    TEST_ASSERT_GREATER_THAN_INT(0, odid_len);
+}
+
+void test_skyspy_find_odid_beacon_ie_not_found() {
+    uint8_t payload[50] = {0};
+    payload[36] = 0x01; // Not a vendor IE
+    payload[37] = 5;
+
+    int odid_len = 0;
+    int result = skyspy_logic::findOdidBeaconIE(payload, 43, 36, &odid_len);
+    TEST_ASSERT_EQUAL_INT(-1, result);
+}
+
+void test_skyspy_slot_allocation_existing() {
+    uint8_t slots[4][6] = {{0}};
+    uint8_t mac[6] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06};
+    memcpy(slots[2], mac, 6);
+    TEST_ASSERT_EQUAL_INT(2, skyspy_logic::findOrAllocateSlot(slots, 4, mac));
+}
+
+void test_skyspy_slot_allocation_empty() {
+    uint8_t slots[4][6] = {{0}};
+    uint8_t mac[6] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06};
+    TEST_ASSERT_EQUAL_INT(0, skyspy_logic::findOrAllocateSlot(slots, 4, mac));
+}
+
+void test_skyspy_slot_allocation_evict() {
+    uint8_t slots[2][6];
+    memset(slots, 0xFF, sizeof(slots)); // All slots non-zero
+    uint8_t mac[6] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06};
+    TEST_ASSERT_EQUAL_INT(0, skyspy_logic::findOrAllocateSlot(slots, 2, mac));
+}
+
+void test_skyspy_is_odid_ble_payload() {
+    uint8_t good[] = {0x00, 0x16, 0xFA, 0xFF, 0x0D, 0x00};
+    TEST_ASSERT_TRUE(skyspy_logic::isOdidBlePayload(good, 6));
+
+    uint8_t bad[] = {0x00, 0x16, 0xFA, 0xFF, 0x0E, 0x00};
+    TEST_ASSERT_FALSE(skyspy_logic::isOdidBlePayload(bad, 6));
+
+    TEST_ASSERT_FALSE(skyspy_logic::isOdidBlePayload(good, 5)); // too short
+}
+
+void test_skyspy_is_nan_action_frame() {
+    uint8_t payload[12] = {0};
+    // NAN dest at offset 4
+    payload[4] = 0x51;
+    payload[5] = 0x6f;
+    payload[6] = 0x9a;
+    payload[7] = 0x01;
+    payload[8] = 0x00;
+    payload[9] = 0x00;
+    TEST_ASSERT_TRUE(skyspy_logic::isNanActionFrame(payload, 12));
+
+    payload[4] = 0x00; // wrong dest
+    TEST_ASSERT_FALSE(skyspy_logic::isNanActionFrame(payload, 12));
+    TEST_ASSERT_FALSE(skyspy_logic::isNanActionFrame(payload, 5)); // too short
+}
+
+void test_skyspy_count_active_uavs() {
+    uint8_t macs[4][6] = {{0}};
+    uint32_t lastSeen[4] = {0};
+
+    // Slot 0: active (mac set, seen 2s ago)
+    macs[0][0] = 0x01;
+    lastSeen[0] = 8000;
+
+    // Slot 1: empty
+    // Slot 2: stale (mac set, seen 10s ago)
+    macs[2][0] = 0x02;
+    lastSeen[2] = 0;
+
+    // Slot 3: active
+    macs[3][0] = 0x03;
+    lastSeen[3] = 5000;
+
+    TEST_ASSERT_EQUAL_INT(2, skyspy_logic::countActiveUavs(lastSeen, macs, 4, 10000, 7000));
+}
+
+// ============================================================================
+// Flockyou Extended Logic Tests
+// ============================================================================
+
+void test_flockyou_find_detection_by_mac() {
+    const char* macs[] = {"AA:BB:CC:11:22:33", "DD:EE:FF:44:55:66"};
+    TEST_ASSERT_EQUAL_INT(0, flockyou_logic::findDetectionByMac(macs, 2, "aa:bb:cc:11:22:33"));
+    TEST_ASSERT_EQUAL_INT(1, flockyou_logic::findDetectionByMac(macs, 2, "DD:EE:FF:44:55:66"));
+    TEST_ASSERT_EQUAL_INT(-1, flockyou_logic::findDetectionByMac(macs, 2, "00:00:00:00:00:00"));
+    TEST_ASSERT_EQUAL_INT(-1, flockyou_logic::findDetectionByMac(nullptr, 0, "AA:BB:CC:11:22:33"));
+}
+
+void test_flockyou_is_out_of_range() {
+    TEST_ASSERT_TRUE(flockyou_logic::isOutOfRange(1000, 32000, 30000));
+    TEST_ASSERT_FALSE(flockyou_logic::isOutOfRange(1000, 30000, 30000));
+    TEST_ASSERT_FALSE(flockyou_logic::isOutOfRange(5000, 10000, 30000));
+}
+
+void test_flockyou_should_heartbeat() {
+    TEST_ASSERT_TRUE(flockyou_logic::shouldHeartbeat(0, 11000, 10000));
+    TEST_ASSERT_FALSE(flockyou_logic::shouldHeartbeat(5000, 10000, 10000));
+    TEST_ASSERT_TRUE(flockyou_logic::shouldHeartbeat(0, 10000, 10000));
+}
+
+void test_flockyou_sanitize_name_char() {
+    TEST_ASSERT_EQUAL_CHAR('a', flockyou_logic::sanitizeNameChar('a'));
+    TEST_ASSERT_EQUAL_CHAR('_', flockyou_logic::sanitizeNameChar('"'));
+    TEST_ASSERT_EQUAL_CHAR('_', flockyou_logic::sanitizeNameChar('\\'));
+    TEST_ASSERT_EQUAL_CHAR(' ', flockyou_logic::sanitizeNameChar(' '));
+}
+
 void test_native_arithmetic_sanity() {
     TEST_ASSERT_EQUAL_INT(4, 2 + 2);
 }
@@ -300,6 +537,36 @@ int main() {
     RUN_TEST(test_flockyou_logic_fw_estimation);
     RUN_TEST(test_buzzer_logic_proximity_interval);
     RUN_TEST(test_neopixel_logic_breathing_and_flash);
+    // Detector cooldown logic
+    RUN_TEST(test_detector_cooldown_in_cooldown);
+    RUN_TEST(test_detector_cooldown_expired_re30s);
+    RUN_TEST(test_detector_cooldown_re3s);
+    RUN_TEST(test_detector_cooldown_too_recent);
+    // Foxhunter proximity logic
+    RUN_TEST(test_foxhunter_prox_not_detected);
+    RUN_TEST(test_foxhunter_prox_in_range_beep);
+    RUN_TEST(test_foxhunter_prox_in_range_no_print);
+    RUN_TEST(test_foxhunter_prox_target_lost);
+    RUN_TEST(test_foxhunter_target_match_no_match);
+    RUN_TEST(test_foxhunter_target_match_first_acquisition);
+    RUN_TEST(test_foxhunter_target_match_reacquired);
+    RUN_TEST(test_foxhunter_target_match_update_existing);
+    RUN_TEST(test_foxhunter_target_match_null_target);
+    // SkySpy logic
+    RUN_TEST(test_skyspy_is_odid_vendor_ie);
+    RUN_TEST(test_skyspy_find_odid_beacon_ie);
+    RUN_TEST(test_skyspy_find_odid_beacon_ie_not_found);
+    RUN_TEST(test_skyspy_slot_allocation_existing);
+    RUN_TEST(test_skyspy_slot_allocation_empty);
+    RUN_TEST(test_skyspy_slot_allocation_evict);
+    RUN_TEST(test_skyspy_is_odid_ble_payload);
+    RUN_TEST(test_skyspy_is_nan_action_frame);
+    RUN_TEST(test_skyspy_count_active_uavs);
+    // Flockyou extended logic
+    RUN_TEST(test_flockyou_find_detection_by_mac);
+    RUN_TEST(test_flockyou_is_out_of_range);
+    RUN_TEST(test_flockyou_should_heartbeat);
+    RUN_TEST(test_flockyou_sanitize_name_char);
     RUN_TEST(test_native_arithmetic_sanity);
     return UNITY_END();
 }

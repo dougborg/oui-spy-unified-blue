@@ -37,6 +37,8 @@ coverage-cpp:
         --filter src/wifi.c \
         --filter src/modules/detector_logic.cpp \
         --filter src/modules/flockyou_logic.cpp \
+        --filter src/modules/foxhunter_logic.cpp \
+        --filter src/modules/skyspy_logic.cpp \
         --filter src/hal/buzzer_logic.cpp \
         --filter src/hal/neopixel_logic.cpp \
         --xml-pretty --xml coverage-native.xml

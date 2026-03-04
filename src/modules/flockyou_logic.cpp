@@ -63,4 +63,29 @@ const char* estimateRavenFirmware(bool hasNewGps, bool hasOldLocation, bool hasP
     return "?";
 }
 
+int findDetectionByMac(const char* const* macs, int count, const char* searchMac) {
+    if (!macs || !searchMac || count <= 0)
+        return -1;
+
+    for (int i = 0; i < count; i++) {
+        if (macs[i] && ::strcasecmp(macs[i], searchMac) == 0)
+            return i;
+    }
+    return -1;
+}
+
+bool isOutOfRange(uint32_t lastDetTime, uint32_t now, uint32_t timeoutMs) {
+    return (now - lastDetTime) >= timeoutMs;
+}
+
+bool shouldHeartbeat(uint32_t lastHeartbeat, uint32_t now, uint32_t intervalMs) {
+    return (now - lastHeartbeat) >= intervalMs;
+}
+
+char sanitizeNameChar(char c) {
+    if (c == '"' || c == '\\')
+        return '_';
+    return c;
+}
+
 } // namespace flockyou_logic
