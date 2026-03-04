@@ -3,6 +3,19 @@ set shell := ["bash", "-cu"]
 default:
     @just --list
 
+web-install:
+    cd web && npm install
+
+web-dev:
+    cd web && npm run dev
+
+web-build:
+    cd web && npm run build
+
+build-all:
+    just web-build
+    just build
+
 setup:
     pio pkg install -d .
 

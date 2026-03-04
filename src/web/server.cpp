@@ -2,7 +2,7 @@
 #include "../hal/buzzer.h"
 #include "../hal/gps.h"
 #include "../storage/nvs_store.h"
-#include "dashboard.h"
+#include "dashboard_gz.h"
 #include <ArduinoJson.h>
 
 namespace web {
@@ -23,9 +23,12 @@ void registerSystemRoutes(IModule** modules, int count) {
     _modules = modules;
     _moduleCount = count;
 
-    // Dashboard HTML
-    _server.on("/", HTTP_GET,
-               [](AsyncWebServerRequest* r) { r->send(200, "text/html", DASHBOARD_HTML); });
+    // Dashboard HTML (gzipped)
+    _server.on("/", HTTP_GET, [](AsyncWebServerRequest* r) {
+        auto* resp = r->beginResponse(200, "text/html", DASHBOARD_HTML_GZ, DASHBOARD_HTML_GZ_LEN);
+        resp->addHeader("Content-Encoding", "gzip");
+        r->send(resp);
+    });
 
     // System status
     _server.on("/api/status", HTTP_GET, [](AsyncWebServerRequest* r) {

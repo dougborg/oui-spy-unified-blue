@@ -10,3 +10,5 @@ __pycache__/
 coverage-native.xml
 *.gcda
 *.gcno
+web/node_modules/
+web/dist/

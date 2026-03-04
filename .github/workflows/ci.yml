@@ -78,6 +78,44 @@ jobs:
           path: coverage-native.xml
           if-no-files-found: error
 
+  web-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install web dependencies
+        run: npm ci
+        working-directory: web
+
+      - name: Build web dashboard
+        run: npm run build
+        working-directory: web
+
+      - name: Check header freshness
+        run: |
+          if ! git diff --exit-code src/web/dashboard_gz.h; then
+            echo "::error::src/web/dashboard_gz.h is stale — run 'cd web && npm run build' and commit"
+            exit 1
+          fi
+
+      - name: Bundle size gate
+        run: |
+          SIZE=$(stat --printf="%s" web/dist/index.html)
+          MAX=102400
+          echo "Bundle size: $SIZE bytes (max: $MAX)"
+          if [ "$SIZE" -gt "$MAX" ]; then
+            echo "::error::Web bundle exceeds 100KB ($SIZE > $MAX)"
+            exit 1
+          fi
+
   build-firmware:
     runs-on: ubuntu-latest
     steps:

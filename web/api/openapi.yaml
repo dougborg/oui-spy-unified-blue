@@ -1,0 +1,680 @@
+openapi: "3.1.0"
+info:
+  title: OUI SPY API
+  version: "1.0.0"
+  description: REST API for OUI SPY unified surveillance detection firmware
+
+servers:
+  - url: http://192.168.4.1
+    description: Device AP (default)
+
+paths:
+  /api/status:
+    get:
+      operationId: getStatus
+      summary: System status (uptime, heap, PSRAM, buzzer)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemStatus"
+
+  /api/modules:
+    get:
+      operationId: getModules
+      summary: List modules with enabled state
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Module"
+
+  /api/modules/toggle:
+    post:
+      operationId: toggleModule
+      summary: Enable or disable a module
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [name, enabled]
+              properties:
+                name:
+                  type: string
+                enabled:
+                  type: string
+                  enum: ["true", "false"]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+
+  /api/buzzer:
+    post:
+      operationId: toggleBuzzer
+      summary: Toggle buzzer on/off
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [on]
+              properties:
+                on:
+                  type: string
+                  enum: ["true", "false"]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  buzzer:
+                    type: boolean
+
+  /api/gps:
+    get:
+      operationId: getGPS
+      summary: GPS status
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GPSData"
+
+  /api/ap:
+    get:
+      operationId: getAP
+      summary: Get AP configuration
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/APConfig"
+    post:
+      operationId: setAP
+      summary: Set AP SSID and password (triggers reboot)
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [ssid]
+              properties:
+                ssid:
+                  type: string
+                  minLength: 1
+                  maxLength: 32
+                pass:
+                  type: string
+                  maxLength: 63
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  reboot:
+                    type: boolean
+
+  /api/reset:
+    post:
+      operationId: resetDevice
+      summary: Restart the device
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+
+  /api/detector/filters:
+    get:
+      operationId: getDetectorFilters
+      summary: Get detector filters
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DetectorFilter"
+    post:
+      operationId: saveDetectorFilters
+      summary: Save detector filters
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                ouis:
+                  type: string
+                macs:
+                  type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  saved:
+                    type: integer
+
+  /api/detector/devices:
+    get:
+      operationId: getDetectorDevices
+      summary: Get detected devices
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  devices:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/DetectorDevice"
+
+  /api/detector/alias:
+    post:
+      operationId: setDetectorAlias
+      summary: Set a device alias
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [mac, alias]
+              properties:
+                mac:
+                  type: string
+                alias:
+                  type: string
+                  maxLength: 32
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /api/detector/clear-devices:
+    post:
+      operationId: clearDetectorDevices
+      summary: Clear device history
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /api/detector/clear-filters:
+    post:
+      operationId: clearDetectorFilters
+      summary: Clear all filters
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /api/foxhunter/status:
+    get:
+      operationId: getFoxhunterStatus
+      summary: Get foxhunter target and RSSI
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FoxhunterStatus"
+
+  /api/foxhunter/target:
+    post:
+      operationId: setFoxhunterTarget
+      summary: Set foxhunter target MAC
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [mac]
+              properties:
+                mac:
+                  type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  target:
+                    type: string
+
+  /api/foxhunter/rssi:
+    get:
+      operationId: getFoxhunterRSSI
+      summary: Get live RSSI reading
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FoxhunterRSSI"
+
+  /api/foxhunter/clear:
+    post:
+      operationId: clearFoxhunterTarget
+      summary: Clear foxhunter target
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cleared:
+                    type: boolean
+
+  /api/flockyou/detections:
+    get:
+      operationId: getFlockyouDetections
+      summary: Get all Flock-You detections
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FlockyouDetection"
+
+  /api/flockyou/stats:
+    get:
+      operationId: getFlockyouStats
+      summary: Get Flock-You stats
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FlockyouStats"
+
+  /api/flockyou/gps:
+    get:
+      operationId: submitPhoneGPS
+      summary: Submit phone GPS coordinates
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          schema:
+            type: number
+        - name: lon
+          in: query
+          required: true
+          schema:
+            type: number
+        - name: acc
+          in: query
+          schema:
+            type: number
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+
+  /api/flockyou/patterns:
+    get:
+      operationId: getFlockyouPatterns
+      summary: Get detection patterns
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+
+  /api/flockyou/export/json:
+    get:
+      operationId: exportFlockyouJSON
+      summary: Download detections as JSON
+      responses:
+        "200":
+          description: JSON file download
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FlockyouDetection"
+
+  /api/flockyou/export/csv:
+    get:
+      operationId: exportFlockyouCSV
+      summary: Download detections as CSV
+      responses:
+        "200":
+          description: CSV file download
+          content:
+            text/csv:
+              schema:
+                type: string
+
+  /api/flockyou/export/kml:
+    get:
+      operationId: exportFlockyouKML
+      summary: Download detections as KML
+      responses:
+        "200":
+          description: KML file download
+          content:
+            application/vnd.google-earth.kml+xml:
+              schema:
+                type: string
+
+  /api/flockyou/history:
+    get:
+      operationId: getFlockyouHistory
+      summary: Get previous session history
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /api/flockyou/history/json:
+    get:
+      operationId: downloadFlockyouHistory
+      summary: Download previous session as JSON
+      responses:
+        "200":
+          description: JSON file download
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /api/flockyou/clear:
+    get:
+      operationId: clearFlockyouDetections
+      summary: Clear all detections
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+
+  /api/skyspy/drones:
+    get:
+      operationId: getSkyspyDrones
+      summary: Get all tracked drones
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SkyspyDrone"
+
+  /api/skyspy/status:
+    get:
+      operationId: getSkyspyStatus
+      summary: Get Sky Spy status
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SkyspyStatus"
+
+components:
+  schemas:
+    SystemStatus:
+      type: object
+      properties:
+        uptime:
+          type: integer
+          description: Seconds since boot
+        heap:
+          type: integer
+          description: Free heap bytes
+        psram:
+          type: integer
+          description: Free PSRAM bytes
+        buzzer:
+          type: boolean
+
+    Module:
+      type: object
+      properties:
+        name:
+          type: string
+        enabled:
+          type: boolean
+
+    GPSData:
+      type: object
+      properties:
+        valid:
+          type: boolean
+        lat:
+          type: number
+        lon:
+          type: number
+        acc:
+          type: number
+        hardware:
+          type: boolean
+        hw_detected:
+          type: boolean
+        hw_fix:
+          type: boolean
+        sats:
+          type: integer
+        fresh:
+          type: boolean
+
+    APConfig:
+      type: object
+      properties:
+        ssid:
+          type: string
+
+    DetectorFilter:
+      type: object
+      properties:
+        id:
+          type: string
+        full:
+          type: boolean
+        desc:
+          type: string
+
+    DetectorDevice:
+      type: object
+      properties:
+        mac:
+          type: string
+        rssi:
+          type: integer
+        filter:
+          type: string
+        alias:
+          type: string
+        timeSince:
+          type: integer
+
+    FoxhunterStatus:
+      type: object
+      properties:
+        target:
+          type: string
+        detected:
+          type: boolean
+        rssi:
+          type: integer
+        lastSeen:
+          type: integer
+
+    FoxhunterRSSI:
+      type: object
+      properties:
+        rssi:
+          type: integer
+        detected:
+          type: boolean
+
+    FlockyouDetection:
+      type: object
+      properties:
+        mac:
+          type: string
+        name:
+          type: string
+        rssi:
+          type: integer
+        method:
+          type: string
+        count:
+          type: integer
+        raven:
+          type: boolean
+        fw:
+          type: string
+        gps:
+          type: boolean
+        last:
+          type: integer
+
+    FlockyouStats:
+      type: object
+      properties:
+        total:
+          type: integer
+        raven:
+          type: integer
+        ble:
+          type: string
+        gps_valid:
+          type: boolean
+        gps_tagged:
+          type: integer
+        gps_src:
+          type: string
+        gps_sats:
+          type: integer
+        gps_hw_detected:
+          type: boolean
+
+    SkyspyDrone:
+      type: object
+      properties:
+        mac:
+          type: string
+        rssi:
+          type: integer
+        drone_lat:
+          type: number
+        drone_long:
+          type: number
+        altitude:
+          type: number
+        height:
+          type: number
+        speed:
+          type: number
+        heading:
+          type: number
+        pilot_lat:
+          type: number
+        pilot_long:
+          type: number
+        uav_id:
+          type: string
+        op_id:
+          type: string
+        last_seen:
+          type: integer
+
+    SkyspyStatus:
+      type: object
+      properties:
+        active_drones:
+          type: integer
+        in_range:
+          type: boolean
