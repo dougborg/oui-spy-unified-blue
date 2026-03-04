@@ -145,6 +145,23 @@ void registerSystemRoutes(IModule** modules, int count) {
         delay(500);
         ESP.restart();
     });
+
+    // Captive portal: iOS, Android, and Windows connectivity checks
+    // Redirect to dashboard so the page pops up automatically on connect
+    auto captiveHandler = [](AsyncWebServerRequest* r) {
+        r->redirect("http://192.168.4.1/");
+    };
+    _server.on("/hotspot-detect.html", HTTP_GET, captiveHandler);        // iOS
+    _server.on("/library/test/success.html", HTTP_GET, captiveHandler);  // iOS
+    _server.on("/generate_204", HTTP_GET, captiveHandler);               // Android
+    _server.on("/gen_204", HTTP_GET, captiveHandler);                    // Android
+    _server.on("/connecttest.txt", HTTP_GET, captiveHandler);            // Windows
+    _server.on("/ncsi.txt", HTTP_GET, captiveHandler);                   // Windows
+
+    // Catch-all for any other captive portal checks
+    _server.onNotFound([](AsyncWebServerRequest* r) {
+        r->redirect("http://192.168.4.1/");
+    });
 }
 
 void serverBegin() {

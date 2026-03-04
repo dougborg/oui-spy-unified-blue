@@ -502,6 +502,252 @@ paths:
               schema:
                 $ref: "#/components/schemas/SkyspyStatus"
 
+  /api/skyspy/start-scan:
+    post:
+      operationId: startSkyspyScan
+      summary: Reboot into WiFi scan mode for full Remote ID detection
+      responses:
+        "200":
+          description: Device will reboot into scan mode
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  reboot:
+                    type: boolean
+
+  /api/wardriver/status:
+    get:
+      operationId: getWardriverStatus
+      summary: Get wardriver session status
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WardriverStatus"
+
+  /api/wardriver/start:
+    post:
+      operationId: startWardriver
+      summary: Start wardriving session
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+
+  /api/wardriver/stop:
+    post:
+      operationId: stopWardriver
+      summary: Stop wardriving session
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+
+  /api/wardriver/clear:
+    post:
+      operationId: clearWardriver
+      summary: Clear wardriver data and CSV
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+
+  /api/wardriver/recent:
+    get:
+      operationId: getWardriverRecent
+      summary: Get recent sightings (last 50)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WardriverSighting"
+
+  /api/wardriver/download:
+    get:
+      operationId: downloadWardriverCSV
+      summary: Download WiGLE CSV file
+      responses:
+        "200":
+          description: CSV file download
+          content:
+            text/csv:
+              schema:
+                type: string
+
+  /api/wardriver/config:
+    get:
+      operationId: getWardriverConfig
+      summary: Get WiGLE API config
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WardriverConfig"
+    post:
+      operationId: setWardriverConfig
+      summary: Set WiGLE API config
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                api_name:
+                  type: string
+                api_token:
+                  type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+
+  /api/wardriver/filters:
+    get:
+      operationId: getWardriverFilters
+      summary: Get wardriver watchlist filters
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WardriverFilter"
+    post:
+      operationId: saveWardriverFilters
+      summary: Save wardriver watchlist filters
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                ouis:
+                  type: string
+                macs:
+                  type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  saved:
+                    type: integer
+
+  /api/wardriver/devices:
+    get:
+      operationId: getWardriverDevices
+      summary: Get wardriver watchlist detected devices
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  devices:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/WardriverDevice"
+
+  /api/wardriver/alias:
+    post:
+      operationId: setWardriverAlias
+      summary: Set a wardriver device alias
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [mac, alias]
+              properties:
+                mac:
+                  type: string
+                alias:
+                  type: string
+                  maxLength: 32
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /api/wardriver/clear-devices:
+    post:
+      operationId: clearWardriverDevices
+      summary: Clear wardriver watchlist history
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /api/wardriver/clear-filters:
+    post:
+      operationId: clearWardriverFilters
+      summary: Clear wardriver watchlist filters
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
 components:
   schemas:
     SystemStatus:
@@ -684,9 +930,83 @@ components:
 
     SkyspyStatus:
       type: object
-      required: [active_drones, in_range]
+      required: [active_drones, in_range, wifi_scanning]
       properties:
         active_drones:
           type: integer
         in_range:
           type: boolean
+        wifi_scanning:
+          type: boolean
+
+    WardriverStatus:
+      type: object
+      required: [active, wifi, ble, unique, csv_size, has_csv, gps_fresh]
+      properties:
+        active:
+          type: boolean
+        wifi:
+          type: integer
+        ble:
+          type: integer
+        unique:
+          type: integer
+        csv_size:
+          type: integer
+        has_csv:
+          type: boolean
+        gps_fresh:
+          type: boolean
+
+    WardriverSighting:
+      type: object
+      required: [mac, ssid, type, rssi, channel, ago]
+      properties:
+        mac:
+          type: string
+        ssid:
+          type: string
+        type:
+          type: string
+        rssi:
+          type: integer
+        channel:
+          type: integer
+        ago:
+          type: integer
+          description: Seconds since sighting
+
+    WardriverConfig:
+      type: object
+      required: [api_name, api_token]
+      properties:
+        api_name:
+          type: string
+        api_token:
+          type: string
+
+    WardriverFilter:
+      type: object
+      required: [id, full, desc]
+      properties:
+        id:
+          type: string
+        full:
+          type: boolean
+        desc:
+          type: string
+
+    WardriverDevice:
+      type: object
+      required: [mac, rssi, filter, alias, timeSince]
+      properties:
+        mac:
+          type: string
+        rssi:
+          type: integer
+        filter:
+          type: string
+        alias:
+          type: string
+        timeSince:
+          type: integer

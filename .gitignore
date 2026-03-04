@@ -13,6 +13,7 @@ coverage-native.xml
 web/node_modules/
 web/dist/
 web/src/api/schema.d.ts
+src/web/dashboard_gz.h
 .env
 release/
 coverage-html/

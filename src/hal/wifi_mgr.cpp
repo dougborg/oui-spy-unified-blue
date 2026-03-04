@@ -5,6 +5,8 @@ namespace hal {
 
 static bool _apRunning = false;
 static bool _promiscuousEnabled = false;
+static bool _scanMode = false;
+static bool _scanInProgress = false;
 
 void wifiInit(const String& ssid, const String& password) {
     // Clean WiFi state
@@ -20,34 +22,74 @@ void wifiInit(const String& ssid, const String& password) {
     WiFi.mode(WIFI_AP_STA);
     delay(200);
 
-    // Start AP
+    // Start AP (default channel)
     bool ok;
     if (password.length() >= 8) {
         ok = WiFi.softAP(ssid.c_str(), password.c_str());
+        Serial.printf("[HAL] WiFi AP '%s' (WPA2): %s\n", ssid.c_str(), ok ? "OK" : "FAILED");
     } else {
         ok = WiFi.softAP(ssid.c_str());
+        Serial.printf("[HAL] WiFi AP '%s' (OPEN): %s\n", ssid.c_str(), ok ? "OK" : "FAILED");
     }
 
-    // Randomize MAC after AP is started (requires esp_wifi_start)
-    randomizeMAC();
-
-    Serial.printf("[HAL] WiFi AP '%s': %s\n", ssid.c_str(), ok ? "OK" : "FAILED");
     Serial.printf("[HAL] AP IP: %s\n", WiFi.softAPIP().toString().c_str());
     _apRunning = ok;
+    _scanMode = false;
+}
+
+void wifiInitScanMode() {
+    // STA-only mode — no AP, safe to set channel explicitly
+    WiFi.mode(WIFI_STA);
+    delay(100);
+    esp_wifi_restore();
+    WiFi.disconnect(true, true);
+    delay(100);
+
+    WiFi.persistent(false);
+    WiFi.mode(WIFI_STA);
+    delay(200);
+
+    _apRunning = false;
+    _scanMode = true;
+    Serial.println("[HAL] WiFi STA-only scan mode initialized");
+}
+
+bool wifiIsScanMode() {
+    return _scanMode;
 }
 
 void wifiUpdate() {
     // Reserved for future use
 }
 
+void wifiEnablePromiscuousScanMode(WiFiFrameCallback cb, uint8_t channel) {
+    if (_promiscuousEnabled)
+        return;
+
+    // In STA-only mode we can safely set the channel
+    esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
+
+    wifi_promiscuous_filter_t filter = {.filter_mask = WIFI_PROMIS_FILTER_MASK_MGMT};
+    esp_wifi_set_promiscuous_filter(&filter);
+    esp_wifi_set_promiscuous_rx_cb(cb);
+    esp_wifi_set_promiscuous(true);
+    _promiscuousEnabled = true;
+    Serial.printf("[HAL] WiFi promiscuous scan mode ON (channel %d)\n", channel);
+}
+
 void wifiEnablePromiscuous(WiFiFrameCallback cb, uint8_t channel) {
     if (_promiscuousEnabled)
         return;
-    esp_wifi_set_promiscuous(true);
+
+    // Set promiscuous filter to only receive management frames
+    wifi_promiscuous_filter_t filter = {.filter_mask = WIFI_PROMIS_FILTER_MASK_MGMT};
+    esp_wifi_set_promiscuous_filter(&filter);
     esp_wifi_set_promiscuous_rx_cb(cb);
-    esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
+    esp_wifi_set_promiscuous(true);
+    // Do NOT call esp_wifi_set_channel() — in AP mode the AP subsystem owns the
+    // channel.  Promiscuous mode receives on whatever channel the radio is tuned to.
     _promiscuousEnabled = true;
-    Serial.printf("[HAL] WiFi promiscuous mode ON (channel %d)\n", channel);
+    Serial.printf("[HAL] WiFi promiscuous mode ON (AP channel)\n");
 }
 
 void wifiDisablePromiscuous() {
@@ -56,6 +98,26 @@ void wifiDisablePromiscuous() {
     esp_wifi_set_promiscuous(false);
     _promiscuousEnabled = false;
     Serial.println("[HAL] WiFi promiscuous mode OFF");
+}
+
+bool wifiStartNetworkScan() {
+    if (_scanInProgress)
+        return false;
+
+    _scanInProgress = true;
+    WiFi.scanNetworks(true); // async=true
+    return true;
+}
+
+int wifiGetScanComplete() {
+    if (!_scanInProgress)
+        return -2;
+    return WiFi.scanComplete();
+}
+
+void wifiScanCleanup() {
+    WiFi.scanDelete();
+    _scanInProgress = false;
 }
 
 IPAddress wifiGetAPIP() {

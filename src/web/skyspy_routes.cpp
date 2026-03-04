@@ -1,4 +1,5 @@
 #include "../modules/skyspy.h"
+#include "../storage/nvs_store.h"
 #include "routes.h"
 #include <ArduinoJson.h>
 #include <ESPAsyncWebServer.h>
@@ -53,9 +54,18 @@ void registerSkySpyRoutes(AsyncWebServer& server, SkySpyModule& mod) {
         JsonDocument doc;
         doc["active_drones"] = count;
         doc["in_range"] = mod.deviceInRange();
+        doc["wifi_scanning"] = false; // Always false — web server only runs in normal mode
         String json;
         serializeJson(doc, json);
         r->send(200, "application/json", json);
+    });
+
+    // Trigger scan mode reboot
+    server.on("/api/skyspy/start-scan", HTTP_POST, [](AsyncWebServerRequest* r) {
+        storage::setSkyScanRequested(true);
+        r->send(200, "application/json", "{\"ok\":true,\"reboot\":true}");
+        delay(500);
+        ESP.restart();
     });
 
     Serial.println("[SKYSPY] Web routes registered");

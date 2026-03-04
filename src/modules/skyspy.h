@@ -4,8 +4,12 @@
 #include "module.h"
 #include "opendroneid.h"
 #include <cstdint>
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
 
 #define SS_MAX_UAVS 8
+#define SS_MAX_PKT_LEN 400
+#define SS_PKT_QUEUE_LEN 4
 
 struct SSUavData {
     uint8_t mac[6];
@@ -38,13 +42,19 @@ class SkySpyModule : public IModule, public hal::BLEListener {
     // hal::BLEListener
     void onBLEAdvertisement(NimBLEAdvertisedDevice* device) override;
 
-    // Called from static WiFi callback
+    // Process queued WiFi frames (called from loop)
+    void processWiFiQueue();
     void handleWiFiFrame(const uint8_t* payload, int length, int rssi);
+
+    QueueHandle_t pktQueue() const {
+        return _pktQueue;
+    }
 
     // Public accessors for route handlers
     SemaphoreHandle_t uavMutex() const {
         return _mutex;
     }
+
     const SSUavData& uavAt(int index) const {
         return _uavs[index];
     }
@@ -53,10 +63,11 @@ class SkySpyModule : public IModule, public hal::BLEListener {
     }
 
   private:
-    bool _enabled = true;
+    bool _enabled = false;
     SSUavData _uavs[SS_MAX_UAVS] = {};
     ODID_UAS_Data _uasData = {};
     SemaphoreHandle_t _mutex = nullptr;
+    QueueHandle_t _pktQueue = nullptr;
     bool _deviceInRange = false;
     unsigned long _lastHeartbeat = 0;
     unsigned long _lastStatus = 0;

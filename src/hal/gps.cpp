@@ -73,6 +73,23 @@ bool gpsIsFresh() {
     return _data.valid && (millis() - _data.lastUpdate < GPS_STALE_MS);
 }
 
+String gpsGetTime() {
+    // Use GPS time if date and time are valid
+    if (_parser.date.isValid() && _parser.time.isValid() && _parser.date.year() >= 2020) {
+        char buf[24];
+        snprintf(buf, sizeof(buf), "%04d-%02d-%02d %02d:%02d:%02d", _parser.date.year(),
+                 _parser.date.month(), _parser.date.day(), _parser.time.hour(), _parser.time.minute(),
+                 _parser.time.second());
+        return String(buf);
+    }
+
+    // Fallback: boot-relative timestamp
+    unsigned long s = millis() / 1000;
+    char buf[24];
+    snprintf(buf, sizeof(buf), "0000-00-00 %02lu:%02lu:%02lu", s / 3600, (s % 3600) / 60, s % 60);
+    return String(buf);
+}
+
 void gpsSetFromPhone(double lat, double lon, float accuracy) {
     // Ignore phone GPS when hardware has a fix
     if (_data.hwFix)

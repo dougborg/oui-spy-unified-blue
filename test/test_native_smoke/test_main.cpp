@@ -8,6 +8,7 @@
 #include "modules/flockyou_logic.h"
 #include "modules/foxhunter_logic.h"
 #include "modules/skyspy_logic.h"
+#include "modules/wardriver_logic.h"
 
 extern "C" {
 #include "opendroneid.h"
@@ -513,6 +514,229 @@ void test_flockyou_sanitize_name_char() {
     TEST_ASSERT_EQUAL_CHAR(' ', flockyou_logic::sanitizeNameChar(' '));
 }
 
+// ============================================================================
+// Wardriver Logic Tests
+// ============================================================================
+
+void test_wardriver_auth_mode_all_values() {
+    // All ESP32 wifi_auth_mode_t values (0-8) plus unknown
+    TEST_ASSERT_EQUAL_STRING("[OPEN]", wardriver_logic::authModeToString(0));
+    TEST_ASSERT_EQUAL_STRING("[WEP]", wardriver_logic::authModeToString(1));
+    TEST_ASSERT_EQUAL_STRING("[WPA-PSK]", wardriver_logic::authModeToString(2));
+    TEST_ASSERT_EQUAL_STRING("[WPA2-PSK]", wardriver_logic::authModeToString(3));
+    TEST_ASSERT_EQUAL_STRING("[WPA/WPA2-PSK]", wardriver_logic::authModeToString(4));
+    TEST_ASSERT_EQUAL_STRING("[WPA2-ENTERPRISE]", wardriver_logic::authModeToString(5));
+    TEST_ASSERT_EQUAL_STRING("[WPA3-PSK]", wardriver_logic::authModeToString(6));
+    TEST_ASSERT_EQUAL_STRING("[WPA2/WPA3-PSK]", wardriver_logic::authModeToString(7));
+    TEST_ASSERT_EQUAL_STRING("[WAPI-PSK]", wardriver_logic::authModeToString(8));
+    TEST_ASSERT_EQUAL_STRING("[UNKNOWN]", wardriver_logic::authModeToString(9));
+    TEST_ASSERT_EQUAL_STRING("[UNKNOWN]", wardriver_logic::authModeToString(-1));
+    TEST_ASSERT_EQUAL_STRING("[UNKNOWN]", wardriver_logic::authModeToString(99));
+}
+
+void test_wardriver_channel_to_freq() {
+    // All 14 valid 2.4GHz channels
+    TEST_ASSERT_EQUAL_INT(2412, wardriver_logic::channelToFreqMHz(1));
+    TEST_ASSERT_EQUAL_INT(2417, wardriver_logic::channelToFreqMHz(2));
+    TEST_ASSERT_EQUAL_INT(2422, wardriver_logic::channelToFreqMHz(3));
+    TEST_ASSERT_EQUAL_INT(2427, wardriver_logic::channelToFreqMHz(4));
+    TEST_ASSERT_EQUAL_INT(2432, wardriver_logic::channelToFreqMHz(5));
+    TEST_ASSERT_EQUAL_INT(2437, wardriver_logic::channelToFreqMHz(6));
+    TEST_ASSERT_EQUAL_INT(2442, wardriver_logic::channelToFreqMHz(7));
+    TEST_ASSERT_EQUAL_INT(2447, wardriver_logic::channelToFreqMHz(8));
+    TEST_ASSERT_EQUAL_INT(2452, wardriver_logic::channelToFreqMHz(9));
+    TEST_ASSERT_EQUAL_INT(2457, wardriver_logic::channelToFreqMHz(10));
+    TEST_ASSERT_EQUAL_INT(2462, wardriver_logic::channelToFreqMHz(11));
+    TEST_ASSERT_EQUAL_INT(2467, wardriver_logic::channelToFreqMHz(12));
+    TEST_ASSERT_EQUAL_INT(2472, wardriver_logic::channelToFreqMHz(13));
+    TEST_ASSERT_EQUAL_INT(2484, wardriver_logic::channelToFreqMHz(14));
+    // Invalid channels
+    TEST_ASSERT_EQUAL_INT(0, wardriver_logic::channelToFreqMHz(0));
+    TEST_ASSERT_EQUAL_INT(0, wardriver_logic::channelToFreqMHz(15));
+    TEST_ASSERT_EQUAL_INT(0, wardriver_logic::channelToFreqMHz(-1));
+}
+
+void test_wardriver_sanitize_ssid() {
+    // Plain SSID passes through unchanged
+    TEST_ASSERT_EQUAL_STRING("MyNetwork", wardriver_logic::sanitizeSSID("MyNetwork").c_str());
+    // Empty SSID returns empty
+    TEST_ASSERT_EQUAL_STRING("", wardriver_logic::sanitizeSSID("").c_str());
+    TEST_ASSERT_EQUAL_STRING("", wardriver_logic::sanitizeSSID(nullptr).c_str());
+    // Commas get quoted
+    TEST_ASSERT_EQUAL_STRING("\"Net,work\"", wardriver_logic::sanitizeSSID("Net,work").c_str());
+    // Double quotes get escaped
+    TEST_ASSERT_EQUAL_STRING("\"Net\"\"work\"", wardriver_logic::sanitizeSSID("Net\"work").c_str());
+    // Newlines become spaces inside quotes
+    TEST_ASSERT_EQUAL_STRING("\"Net work\"", wardriver_logic::sanitizeSSID("Net\nwork").c_str());
+    // Carriage returns become spaces inside quotes
+    TEST_ASSERT_EQUAL_STRING("\"Net work\"", wardriver_logic::sanitizeSSID("Net\rwork").c_str());
+    // Multiple special chars combined
+    TEST_ASSERT_EQUAL_STRING("\"a,b\"\"c d\"",
+                             wardriver_logic::sanitizeSSID("a,b\"c\nd").c_str());
+}
+
+void test_wardriver_format_wigle_row_wifi() {
+    std::string row =
+        wardriver_logic::formatWigleRow("AA:BB:CC:DD:EE:FF", "TestNet", "[WPA2-PSK]", "WIFI", 6,
+                                        -65, 47.12345678, -122.98765432, 10.0f, "2025-01-01 00:00:00");
+    // Should contain all fields separated by commas
+    TEST_ASSERT_TRUE(row.find("AA:BB:CC:DD:EE:FF") != std::string::npos);
+    TEST_ASSERT_TRUE(row.find("TestNet") != std::string::npos);
+    TEST_ASSERT_TRUE(row.find("[WPA2-PSK]") != std::string::npos);
+    TEST_ASSERT_TRUE(row.find("WIFI") != std::string::npos);
+    TEST_ASSERT_TRUE(row.find("-65") != std::string::npos);
+    TEST_ASSERT_TRUE(row.find("2025-01-01 00:00:00") != std::string::npos);
+    TEST_ASSERT_TRUE(row.find("47.12345678") != std::string::npos);
+    // Count commas: MAC,SSID,Auth,Time,Chan,RSSI,Lat,Lon,Alt,Acc,Type = 10 commas
+    int commas = 0;
+    for (char c : row) {
+        if (c == ',')
+            commas++;
+    }
+    TEST_ASSERT_EQUAL_INT(10, commas);
+}
+
+void test_wardriver_format_wigle_row_ble() {
+    std::string row =
+        wardriver_logic::formatWigleRow("11:22:33:44:55:66", "MyDevice", "[BLE]", "BLE", 0,
+                                        -80, 40.0, -74.0, 5.0f, "2025-06-15 12:30:00");
+    TEST_ASSERT_TRUE(row.find("11:22:33:44:55:66") != std::string::npos);
+    TEST_ASSERT_TRUE(row.find("MyDevice") != std::string::npos);
+    TEST_ASSERT_TRUE(row.find("[BLE]") != std::string::npos);
+    TEST_ASSERT_TRUE(row.find("BLE") != std::string::npos);
+    // Channel 0 for BLE
+    TEST_ASSERT_TRUE(row.find(",0,") != std::string::npos);
+}
+
+void test_wardriver_format_wigle_row_special_ssid() {
+    // SSID with comma should be CSV-safe quoted
+    std::string row =
+        wardriver_logic::formatWigleRow("AA:BB:CC:DD:EE:FF", "Net,work", "[OPEN]", "WIFI", 1,
+                                        -50, 0.0, 0.0, 0.0f, "2025-01-01 00:00:00");
+    TEST_ASSERT_TRUE(row.find("\"Net,work\"") != std::string::npos);
+    // Still 10 structural commas (the one inside quotes doesn't break field count)
+    // Parse: split on commas outside quotes
+    // Easier: verify the MAC is at position 0 and Type is at the end
+    TEST_ASSERT_TRUE(row.substr(0, 17) == "AA:BB:CC:DD:EE:FF");
+    TEST_ASSERT_TRUE(row.substr(row.size() - 4) == "WIFI");
+}
+
+void test_wardriver_hash_mac() {
+    uint32_t h1 = wardriver_logic::hashMAC("AA:BB:CC:DD:EE:FF");
+    uint32_t h2 = wardriver_logic::hashMAC("AA:BB:CC:DD:EE:FF");
+    uint32_t h3 = wardriver_logic::hashMAC("11:22:33:44:55:66");
+    // Same input -> same hash
+    TEST_ASSERT_EQUAL_UINT32(h1, h2);
+    // Different input -> different hash (overwhelmingly likely)
+    TEST_ASSERT_NOT_EQUAL(h1, h3);
+    // Never returns 0 (0 is our empty sentinel)
+    TEST_ASSERT_NOT_EQUAL((uint32_t)0, h1);
+    TEST_ASSERT_NOT_EQUAL((uint32_t)0, h3);
+    // Empty string still produces a non-zero hash
+    TEST_ASSERT_NOT_EQUAL((uint32_t)0, wardriver_logic::hashMAC(""));
+}
+
+void test_wardriver_hash_mac_case_sensitive() {
+    // Hash is case-sensitive (MACs in the firmware are passed as-is)
+    uint32_t h1 = wardriver_logic::hashMAC("aa:bb:cc:dd:ee:ff");
+    uint32_t h2 = wardriver_logic::hashMAC("AA:BB:CC:DD:EE:FF");
+    // Different case -> different hash (FNV-1a is byte-level)
+    TEST_ASSERT_NOT_EQUAL(h1, h2);
+}
+
+void test_wardriver_dedup_basic() {
+    const int CAP = 64;
+    uint32_t set[CAP];
+    memset(set, 0, sizeof(set));
+
+    // Empty set has count 0
+    TEST_ASSERT_EQUAL_INT(0, wardriver_logic::dedupCount(set, CAP));
+
+    uint32_t h1 = wardriver_logic::hashMAC("AA:BB:CC:DD:EE:FF");
+    uint32_t h2 = wardriver_logic::hashMAC("11:22:33:44:55:66");
+
+    // First insert returns true (new)
+    TEST_ASSERT_TRUE(wardriver_logic::dedupInsert(set, CAP, h1));
+    TEST_ASSERT_EQUAL_INT(1, wardriver_logic::dedupCount(set, CAP));
+
+    // Duplicate insert returns false
+    TEST_ASSERT_FALSE(wardriver_logic::dedupInsert(set, CAP, h1));
+    TEST_ASSERT_EQUAL_INT(1, wardriver_logic::dedupCount(set, CAP));
+
+    // Contains works
+    TEST_ASSERT_TRUE(wardriver_logic::dedupContains(set, CAP, h1));
+    TEST_ASSERT_FALSE(wardriver_logic::dedupContains(set, CAP, h2));
+
+    // Insert second
+    TEST_ASSERT_TRUE(wardriver_logic::dedupInsert(set, CAP, h2));
+    TEST_ASSERT_EQUAL_INT(2, wardriver_logic::dedupCount(set, CAP));
+    TEST_ASSERT_TRUE(wardriver_logic::dedupContains(set, CAP, h2));
+}
+
+void test_wardriver_dedup_full_table() {
+    // Small capacity to test full-table behavior
+    const int CAP = 4;
+    uint32_t set[CAP];
+    memset(set, 0, sizeof(set));
+
+    // Fill the table completely
+    char mac[20];
+    int inserted = 0;
+    for (int i = 0; i < 100 && inserted < CAP; i++) {
+        snprintf(mac, sizeof(mac), "AA:BB:CC:DD:%02X:%02X", i / 256, i % 256);
+        uint32_t h = wardriver_logic::hashMAC(mac);
+        if (wardriver_logic::dedupInsert(set, CAP, h))
+            inserted++;
+    }
+    TEST_ASSERT_EQUAL_INT(CAP, wardriver_logic::dedupCount(set, CAP));
+
+    // After table is full, new inserts return false
+    uint32_t newHash = wardriver_logic::hashMAC("FF:FF:FF:FF:FF:FF");
+    bool result = wardriver_logic::dedupInsert(set, CAP, newHash);
+    // Either it was already (by collision) or table is full — either way false
+    TEST_ASSERT_FALSE(result);
+}
+
+void test_wardriver_dedup_zero_hash_rejected() {
+    const int CAP = 8;
+    uint32_t set[CAP];
+    memset(set, 0, sizeof(set));
+
+    // Zero hash is rejected (it's our empty sentinel)
+    TEST_ASSERT_FALSE(wardriver_logic::dedupInsert(set, CAP, 0));
+    TEST_ASSERT_FALSE(wardriver_logic::dedupContains(set, CAP, 0));
+    TEST_ASSERT_EQUAL_INT(0, wardriver_logic::dedupCount(set, CAP));
+}
+
+void test_wardriver_dedup_many_entries() {
+    // Stress test with realistic capacity
+    const int CAP = 256;
+    uint32_t set[CAP];
+    memset(set, 0, sizeof(set));
+
+    // Insert 128 unique MACs (50% load factor - should have zero collisions issues)
+    char mac[20];
+    for (int i = 0; i < 128; i++) {
+        snprintf(mac, sizeof(mac), "AA:BB:%02X:%02X:%02X:%02X",
+                 (i >> 12) & 0xFF, (i >> 8) & 0xFF, (i >> 4) & 0xFF, i & 0xFF);
+        uint32_t h = wardriver_logic::hashMAC(mac);
+        wardriver_logic::dedupInsert(set, CAP, h);
+    }
+
+    // All 128 should be findable
+    int found = 0;
+    for (int i = 0; i < 128; i++) {
+        snprintf(mac, sizeof(mac), "AA:BB:%02X:%02X:%02X:%02X",
+                 (i >> 12) & 0xFF, (i >> 8) & 0xFF, (i >> 4) & 0xFF, i & 0xFF);
+        uint32_t h = wardriver_logic::hashMAC(mac);
+        if (wardriver_logic::dedupContains(set, CAP, h))
+            found++;
+    }
+    TEST_ASSERT_EQUAL_INT(128, found);
+    // Count should match
+    TEST_ASSERT_EQUAL_INT(128, wardriver_logic::dedupCount(set, CAP));
+}
+
 void test_native_arithmetic_sanity() {
     TEST_ASSERT_EQUAL_INT(4, 2 + 2);
 }
@@ -567,6 +791,19 @@ int main() {
     RUN_TEST(test_flockyou_is_out_of_range);
     RUN_TEST(test_flockyou_should_heartbeat);
     RUN_TEST(test_flockyou_sanitize_name_char);
+    // Wardriver logic
+    RUN_TEST(test_wardriver_auth_mode_all_values);
+    RUN_TEST(test_wardriver_channel_to_freq);
+    RUN_TEST(test_wardriver_sanitize_ssid);
+    RUN_TEST(test_wardriver_format_wigle_row_wifi);
+    RUN_TEST(test_wardriver_format_wigle_row_ble);
+    RUN_TEST(test_wardriver_format_wigle_row_special_ssid);
+    RUN_TEST(test_wardriver_hash_mac);
+    RUN_TEST(test_wardriver_hash_mac_case_sensitive);
+    RUN_TEST(test_wardriver_dedup_basic);
+    RUN_TEST(test_wardriver_dedup_full_table);
+    RUN_TEST(test_wardriver_dedup_zero_hash_rejected);
+    RUN_TEST(test_wardriver_dedup_many_entries);
     RUN_TEST(test_native_arithmetic_sanity);
     return UNITY_END();
 }

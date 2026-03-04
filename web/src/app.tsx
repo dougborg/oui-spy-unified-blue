@@ -8,8 +8,9 @@ import { TabBar } from "./components/layout/tab-bar";
 import { ToastProvider } from "./components/shared/toast";
 import { SkyspyPage } from "./components/skyspy/skyspy-page";
 import { SystemPage } from "./components/system/system-page";
+import { WardriverPage } from "./components/wardriver/wardriver-page";
 
-const TABS = ["SYSTEM", "DETECT", "FOX", "FLOCK", "SKY"] as const;
+const TABS = ["SYSTEM", "DETECT", "FOX", "FLOCK", "SKY", "DRIVE"] as const;
 
 export function App() {
   const [activeTab, setActiveTab] = useState(0);
@@ -24,6 +25,7 @@ export function App() {
         {activeTab === 2 && <FoxhunterPage />}
         {activeTab === 3 && <FlockyouPage />}
         {activeTab === 4 && <SkyspyPage />}
+        {activeTab === 5 && <WardriverPage />}
       </PageShell>
     </ToastProvider>
   );

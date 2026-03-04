@@ -12,9 +12,10 @@ namespace hal {
 
 // Animation states (ordered by priority, highest wins)
 enum NeoPixelState : uint8_t {
-    NEO_IDLE_BREATHING = 0,  // Default: slow breathing
-    NEO_HEARTBEAT_GLOW = 1,  // Device in range: dim steady glow
-    NEO_DETECTION_FLASH = 2, // Detection alert: rapid color flashes
+    NEO_IDLE_BREATHING = 0,   // Default: slow breathing
+    NEO_HEARTBEAT_GLOW = 1,   // Device in range: dim steady glow
+    NEO_DETECTION_FLASH = 2,  // Detection alert: rapid color flashes
+    NEO_SCAN_MODE_CYCLE = 3,  // Scan mode: blue↔cyan breathing
 };
 
 void neopixelInit();
@@ -28,6 +29,9 @@ void neopixelFlash(uint16_t hue1 = 240, uint16_t hue2 = 300, uint16_t hue3 = 270
 
 // Set idle breathing hue (per-module customization)
 void neopixelSetIdleHue(uint16_t hue);
+
+// Start scan mode animation (blue↔cyan breathing)
+void neopixelStartScanAnimation();
 
 // Direct color control
 void neopixelSetColor(uint8_t r, uint8_t g, uint8_t b);

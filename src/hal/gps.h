@@ -31,6 +31,10 @@ const GPSData& gpsGet();
 // Is GPS data fresh (< 30s old)?
 bool gpsIsFresh();
 
+// Get formatted GPS time for CSV timestamps (YYYY-MM-DD HH:MM:SS)
+// Returns boot-relative timestamp if no GPS time available.
+String gpsGetTime();
+
 // Set GPS from phone browser (via web API)
 void gpsSetFromPhone(double lat, double lon, float accuracy);
 

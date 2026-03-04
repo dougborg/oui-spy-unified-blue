@@ -101,6 +101,10 @@ void neopixelFlash(uint16_t hue1, uint16_t hue2, uint16_t hue3) {
     _flashHues[2] = hue3;
 }
 
+void neopixelStartScanAnimation() {
+    _state = NEO_SCAN_MODE_CYCLE;
+}
+
 void neopixelSetColor(uint8_t r, uint8_t g, uint8_t b) {
     _strip.setPixelColor(0, _strip.Color(r, g, b));
     _strip.show();
@@ -146,6 +150,38 @@ static void updateHeartbeat() {
     _strip.show();
 }
 
+// Scan mode: smooth blue↔cyan breathing
+static float _scanBrightness = 0.0;
+static bool _scanIncreasing = true;
+static unsigned long _scanLastUpdate = 0;
+
+static void updateScanModeCycle() {
+    if (millis() - _scanLastUpdate < 25)
+        return;
+    _scanLastUpdate = millis();
+
+    // Breathing envelope
+    if (_scanIncreasing) {
+        _scanBrightness += 0.02f;
+        if (_scanBrightness >= 1.0f) {
+            _scanBrightness = 1.0f;
+            _scanIncreasing = false;
+        }
+    } else {
+        _scanBrightness -= 0.02f;
+        if (_scanBrightness <= 0.15f) {
+            _scanBrightness = 0.15f;
+            _scanIncreasing = true;
+        }
+    }
+
+    // Hue oscillates between blue (240) and cyan (180)
+    uint16_t hue = 180 + (uint16_t)(60.0f * _scanBrightness);
+    uint8_t val = (uint8_t)(NEOPIXEL_BRIGHTNESS * _scanBrightness);
+    _strip.setPixelColor(0, hsvToRgb(hue, 255, val));
+    _strip.show();
+}
+
 void neopixelUpdate() {
     // Flash always takes priority
     if (_flashing) {
@@ -154,6 +190,9 @@ void neopixelUpdate() {
     }
 
     switch (_state) {
+    case NEO_SCAN_MODE_CYCLE:
+        updateScanModeCycle();
+        break;
     case NEO_DETECTION_FLASH:
         // If flash was triggered via state (shouldn't normally happen)
         updateFlash();

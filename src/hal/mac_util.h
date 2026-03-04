@@ -20,7 +20,7 @@ inline void randomizeMAC() {
     mac[4] = (r2 >> 0) & 0xFF;
     mac[5] = (r2 >> 8) & 0xFF;
     mac[0] = (mac[0] | 0x02) & 0xFE; // locally administered, unicast
-    esp_wifi_set_mac(WIFI_IF_AP, mac);
+    esp_wifi_set_mac(WIFI_IF_STA, mac);
     Serial.printf("[HAL] Randomized MAC: %02X:%02X:%02X:%02X:%02X:%02X\n", mac[0], mac[1], mac[2],
                   mac[3], mac[4], mac[5]);
 }

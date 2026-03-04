@@ -15,6 +15,11 @@ export type FlockyouDetection = components["schemas"]["FlockyouDetection"];
 export type FlockyouStats = components["schemas"]["FlockyouStats"];
 export type SkyspyDrone = components["schemas"]["SkyspyDrone"];
 export type SkyspyStatus = components["schemas"]["SkyspyStatus"];
+export type WardriverStatus = components["schemas"]["WardriverStatus"];
+export type WardriverSighting = components["schemas"]["WardriverSighting"];
+export type WardriverConfig = components["schemas"]["WardriverConfig"];
+export type WardriverFilter = components["schemas"]["WardriverFilter"];
+export type WardriverDevice = components["schemas"]["WardriverDevice"];
 
 export const api = createClient<paths>({
   baseUrl: "",

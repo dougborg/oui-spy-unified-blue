@@ -1,5 +1,8 @@
+import { postEmpty } from "../../api/client";
 import type { SkyspyDrone, SkyspyStatus } from "../../api/client";
 import { usePoll } from "../../hooks/use-poll";
+import { Button } from "../shared/button";
+import { Card } from "../shared/card";
 import { DeviceCard, Tag } from "../shared/device-card";
 import { EmptyState } from "../shared/empty-state";
 import { StatCard } from "../shared/stat-card";
@@ -8,8 +11,27 @@ export function SkyspyPage() {
   const { data: drones } = usePoll<SkyspyDrone[]>("/api/skyspy/drones", 2000);
   const { data: status } = usePoll<SkyspyStatus>("/api/skyspy/status", 2000);
 
+  const startScan = async () => {
+    if (
+      !confirm(
+        "Reboot into WiFi scan mode?\n\nThe device will restart in dedicated scan mode (no web dashboard). Hold BOOT button 1.5s to return to normal mode.",
+      )
+    )
+      return;
+    await postEmpty("/api/skyspy/start-scan");
+  };
+
   return (
     <div>
+      <Card title="WIFI SCAN MODE">
+        <p class="mb-1.5 text-xs text-text-dim">
+          Reboot into dedicated WiFi scan mode for full Remote ID detection (NAN action frames on
+          channel 6). BLE detection is always active in normal mode. Hold BOOT button 1.5s to
+          return.
+        </p>
+        <Button onClick={startScan}>START WIFI SCAN</Button>
+      </Card>
+
       <div class="mb-1.5 flex gap-1.5">
         <StatCard value={drones?.length ?? 0} label="DRONES" />
         <StatCard

@@ -8,6 +8,13 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 
+// Queued packet for deferred processing outside WiFi driver task
+struct SSQueuedPkt {
+    uint8_t data[SS_MAX_PKT_LEN];
+    int length;
+    int rssi;
+};
+
 // ============================================================================
 // Sky Spy Module: Open Drone ID detection via BLE + WiFi promiscuous mode
 // ============================================================================
@@ -45,6 +52,7 @@ void SkySpyModule::sendJSON(const SSUavData* uav) {
 void SkySpyModule::extractFromODID(SSUavData* uav) {
     if (_uasData.BasicIDValid[0]) {
         strncpy(uav->uavId, (char*)_uasData.BasicID[0].UASID, ODID_ID_SIZE);
+        uav->uavId[ODID_ID_SIZE] = '\0';
     }
     if (_uasData.LocationValid) {
         uav->latD = _uasData.Location.Latitude;
@@ -60,6 +68,7 @@ void SkySpyModule::extractFromODID(SSUavData* uav) {
     }
     if (_uasData.OperatorIDValid) {
         strncpy(uav->opId, (char*)_uasData.OperatorID.OperatorId, ODID_ID_SIZE);
+        uav->opId[ODID_ID_SIZE] = '\0';
     }
 }
 
@@ -81,12 +90,33 @@ void skyspyWiFiCallback(void* buffer, wifi_promiscuous_pkt_type_t type) {
         return;
 
     wifi_promiscuous_pkt_t* packet = (wifi_promiscuous_pkt_t*)buffer;
-    uint8_t* payload = packet->payload;
     int length = packet->rx_ctrl.sig_len;
     if (length > 4)
-        length -= 4; // Strip FCS (not present in payload buffer)
+        length -= 4; // Strip FCS
 
-    ssInstance->handleWiFiFrame(payload, length, packet->rx_ctrl.rssi);
+    if (length <= 0 || length > SS_MAX_PKT_LEN)
+        return;
+
+    // Quick-filter: only action frames (0xd0) or beacons (0x80)
+    uint8_t subtype = packet->payload[0];
+    if (subtype != 0xd0 && subtype != 0x80)
+        return;
+
+    // Static buffer — callback runs in WiFi driver task, avoid stack pressure
+    static SSQueuedPkt pkt;
+    memcpy(pkt.data, packet->payload, length);
+    pkt.length = length;
+    pkt.rssi = packet->rx_ctrl.rssi;
+
+    // Non-blocking enqueue — drop if full
+    xQueueSend(ssInstance->pktQueue(), &pkt, 0);
+}
+
+void SkySpyModule::processWiFiQueue() {
+    static SSQueuedPkt pkt;
+    while (xQueueReceive(_pktQueue, &pkt, 0) == pdTRUE) {
+        handleWiFiFrame(pkt.data, pkt.length, pkt.rssi);
+    }
 }
 
 void SkySpyModule::handleWiFiFrame(const uint8_t* payload, int length, int rssi) {
@@ -162,17 +192,19 @@ void SkySpyModule::handleWiFiFrame(const uint8_t* payload, int length, int rssi)
 
 void SkySpyModule::setup() {
     _mutex = xSemaphoreCreateMutex();
+    _pktQueue = xQueueCreate(SS_PKT_QUEUE_LEN, sizeof(SSQueuedPkt));
     memset(_uavs, 0, sizeof(_uavs));
     ssInstance = this;
-
-    // Enable WiFi promiscuous mode for drone ID detection
-    hal::wifiEnablePromiscuous(skyspyWiFiCallback, 6);
-    Serial.println("[SKYSPY] Module initialized (BLE + WiFi promiscuous)");
+    Serial.println("[SKYSPY] Module initialized (BLE active, WiFi scan via reboot)");
 }
 
 void SkySpyModule::loop() {
     if (!_enabled)
         return;
+
+    // Process any WiFi frames queued by the promiscuous callback
+    // (queue is only populated in scan mode; no-op in normal mode)
+    processWiFiQueue();
 
     unsigned long now = millis();
 
@@ -234,6 +266,7 @@ void SkySpyModule::onBLEAdvertisement(NimBLEAdvertisedDevice* device) {
         ODID_BasicID_data basic;
         decodeBasicIDMessage(&basic, (ODID_BasicID_encoded*)odid);
         strncpy(uav->uavId, (char*)basic.UASID, ODID_ID_SIZE);
+        uav->uavId[ODID_ID_SIZE] = '\0';
         break;
     }
     case 0x10: {
@@ -258,6 +291,7 @@ void SkySpyModule::onBLEAdvertisement(NimBLEAdvertisedDevice* device) {
         ODID_OperatorID_data op;
         decodeOperatorIDMessage(&op, (ODID_OperatorID_encoded*)odid);
         strncpy(uav->opId, (char*)op.OperatorId, ODID_ID_SIZE);
+        uav->opId[ODID_ID_SIZE] = '\0';
         break;
     }
     }
@@ -280,10 +314,7 @@ bool SkySpyModule::isEnabled() {
 }
 void SkySpyModule::setEnabled(bool enabled) {
     _enabled = enabled;
-    if (enabled) {
-        hal::wifiEnablePromiscuous(skyspyWiFiCallback, 6);
-    } else {
-        hal::wifiDisablePromiscuous();
+    if (!enabled) {
         _deviceInRange = false;
     }
 }

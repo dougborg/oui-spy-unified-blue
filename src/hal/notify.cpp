@@ -46,12 +46,33 @@ void notify(NotifyEvent event) {
         buzzerPlay(SND_FOX_FIRST);
         break;
 
+    // Wardriver events (cyan/magenta/purple: hues 180, 300, 270)
+    case NOTIFY_WD_NEW_DEVICE:
+        buzzerPlay(SND_THREE_BEEPS);
+        neopixelFlash(180, 300, 270);
+        break;
+    case NOTIFY_WD_RE_3S:
+        buzzerPlay(SND_TWO_BEEPS);
+        neopixelFlash(180, 300, 270);
+        break;
+    case NOTIFY_WD_RE_30S:
+        buzzerPlay(SND_THREE_BEEPS);
+        neopixelFlash(180, 300, 270);
+        break;
+    case NOTIFY_WD_SESSION_START:
+        buzzerPlay(SND_ASCENDING);
+        break;
+
     // Boot events
     case NOTIFY_BOOT_READY:
         buzzerPlay(SND_ZELDA_SECRET);
         break;
     case NOTIFY_BOOT_HOLD:
         buzzerPlay(SND_ASCENDING);
+        break;
+    case NOTIFY_SCAN_MODE_BOOT:
+        buzzerPlay(SND_CLOSE_ENCOUNTERS);
+        neopixelStartScanAnimation();
         break;
     }
 }
