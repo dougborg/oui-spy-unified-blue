@@ -305,8 +305,8 @@ void SkySpyModule::onBLEAdvertisement(NimBLEAdvertisedDevice* device) {
 // Web Routes
 // ============================================================================
 
-void SkySpyModule::registerRoutes(AsyncWebServer& server) {
-    registerSkySpyRoutes(server, *this);
+void SkySpyModule::registerRoutes(httpd_handle_t https, httpd_handle_t http) {
+    registerSkySpyRoutes(https, http, *this);
 }
 
 bool SkySpyModule::isEnabled() {

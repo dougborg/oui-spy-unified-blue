@@ -4,6 +4,7 @@
 #include "module.h"
 #include "opendroneid.h"
 #include <cstdint>
+#include <esp_http_server.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 
@@ -35,7 +36,7 @@ class SkySpyModule : public IModule, public hal::BLEListener {
     }
     void setup() override;
     void loop() override;
-    void registerRoutes(AsyncWebServer& server) override;
+    void registerRoutes(httpd_handle_t https, httpd_handle_t http) override;
     bool isEnabled() override;
     void setEnabled(bool enabled) override;
 

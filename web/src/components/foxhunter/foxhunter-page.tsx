@@ -1,20 +1,30 @@
 import { useEffect, useState } from "preact/hooks";
 import { postEmpty, postForm } from "../../api/client";
-import type { FoxhunterStatus } from "../../api/client";
+import type { FoxhunterStatus, Module } from "../../api/client";
 import { usePoll } from "../../hooks/use-poll";
 import { Button } from "../shared/button";
 import { Card } from "../shared/card";
+import { ModuleBadge } from "../shared/module-badge";
 import { ProgressBar } from "../shared/progress-bar";
+import { LoadingState } from "../shared/spinner";
 import { StatCard } from "../shared/stat-card";
 import { TextInput } from "../shared/text-input";
 import { useToast } from "../shared/toast";
 
+const MAC_RE =
+  /^[0-9a-fA-F]{2}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}$/;
+
 export function FoxhunterPage() {
   const { toast } = useToast();
-  const { data, refresh } = usePoll<FoxhunterStatus>("/api/foxhunter/status", 500);
+  const { data, refresh, loading } = usePoll<FoxhunterStatus>("/api/foxhunter/status", 500);
+  const { data: modules } = usePoll<Module[]>("/api/modules", 10000);
 
   const [mac, setMac] = useState("");
   const [macLoaded, setMacLoaded] = useState(false);
+  const [macError, setMacError] = useState("");
+  const [setting, setSetting] = useState(false);
+
+  const moduleEnabled = modules?.find((m) => m.name === "foxhunter")?.enabled ?? true;
 
   useEffect(() => {
     if (data?.target && !macLoaded) {
@@ -23,25 +33,40 @@ export function FoxhunterPage() {
     }
   }, [data, macLoaded]);
 
+  if (loading) return <LoadingState />;
+
   const setTarget = async () => {
     const trimmed = mac.trim();
     if (!trimmed) {
       toast("Enter MAC address", "error");
       return;
     }
+    if (!MAC_RE.test(trimmed)) {
+      setMacError("Invalid MAC format (XX:XX:XX:XX:XX:XX)");
+      return;
+    }
+    setMacError("");
+    setSetting(true);
     try {
       await postForm("/api/foxhunter/target", { mac: trimmed });
       refresh();
     } catch {
-      toast("Invalid MAC format", "error");
+      toast("Failed to set target", "error");
+    } finally {
+      setSetting(false);
     }
   };
 
   const clearTarget = async () => {
-    await postEmpty("/api/foxhunter/clear");
-    setMac("");
-    setMacLoaded(false);
-    refresh();
+    try {
+      await postEmpty("/api/foxhunter/clear");
+      setMac("");
+      setMacLoaded(false);
+      refresh();
+      toast("Target cleared", "success");
+    } catch {
+      toast("Failed to clear target", "error");
+    }
   };
 
   const rssiPercent = data?.detected
@@ -50,6 +75,8 @@ export function FoxhunterPage() {
 
   return (
     <div>
+      <ModuleBadge moduleName="foxhunter" enabled={moduleEnabled} />
+
       <div class="mb-1.5 flex gap-1.5">
         <StatCard value={data?.detected ? data.rssi : "-"} label="RSSI dBm" />
         <StatCard
@@ -61,8 +88,9 @@ export function FoxhunterPage() {
 
       <Card title="TARGET MAC">
         <TextInput value={mac} onInput={setMac} placeholder="AA:BB:CC:DD:EE:FF" maxLength={17} />
+        {macError && <div class="mb-1 text-[10px] text-danger-bright">{macError}</div>}
         <div class="flex gap-1.5">
-          <Button small onClick={setTarget}>
+          <Button small onClick={setTarget} loading={setting}>
             SET TARGET
           </Button>
           <Button small variant="danger" onClick={clearTarget}>
@@ -73,6 +101,11 @@ export function FoxhunterPage() {
 
       <Card title="RSSI METER">
         <ProgressBar percent={rssiPercent} />
+        {!data?.target && (
+          <div class="mt-1 text-[10px] text-text-muted">
+            Set a target MAC address to begin tracking
+          </div>
+        )}
       </Card>
     </div>
   );

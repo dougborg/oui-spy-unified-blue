@@ -2,7 +2,7 @@ import type { SystemStatus } from "../../api/client";
 import { usePoll } from "../../hooks/use-poll";
 
 export function Header() {
-  const { data } = usePoll<SystemStatus>("/api/status", 5000);
+  const { data, connectionLost } = usePoll<SystemStatus>("/api/status", 5000);
 
   const uptimeText = data
     ? (() => {
@@ -20,7 +20,11 @@ export function Header() {
     <header class="flex-shrink-0 border-b-2 border-border-bright bg-bg-primary px-3 py-2">
       <h1 class="text-center text-xl font-bold tracking-[3px] text-accent">OUI SPY</h1>
       <div class="mt-0.5 text-center text-[10px] text-text-secondary">
-        {sub || "UNIFIED FIRMWARE"}
+        {connectionLost ? (
+          <span class="font-bold text-danger-bright">DISCONNECTED</span>
+        ) : (
+          sub || "UNIFIED FIRMWARE"
+        )}
       </div>
     </header>
   );

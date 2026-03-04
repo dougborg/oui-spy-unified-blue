@@ -262,11 +262,11 @@ void DetectorModule::clearFilters() {
     saveFilters();
 }
 
-void DetectorModule::parseFiltersFromRequest(AsyncWebServerRequest* request) {
+void DetectorModule::parseFilters(const String& ouis, const String& macs) {
     _filters.clear();
     // OUI entries
-    if (request->hasParam("ouis", true)) {
-        String data = request->getParam("ouis", true)->value();
+    {
+        String data = ouis;
         data.trim();
         if (data.length() > 0) {
             int start = 0, end = data.indexOf('\n');
@@ -289,8 +289,8 @@ void DetectorModule::parseFiltersFromRequest(AsyncWebServerRequest* request) {
         }
     }
     // MAC entries
-    if (request->hasParam("macs", true)) {
-        String data = request->getParam("macs", true)->value();
+    {
+        String data = macs;
         data.trim();
         if (data.length() > 0) {
             int start = 0, end = data.indexOf('\n');
@@ -314,8 +314,8 @@ void DetectorModule::parseFiltersFromRequest(AsyncWebServerRequest* request) {
     }
 }
 
-void DetectorModule::registerRoutes(AsyncWebServer& server) {
-    registerDetectorRoutes(server, *this);
+void DetectorModule::registerRoutes(httpd_handle_t https, httpd_handle_t http) {
+    registerDetectorRoutes(https, http, *this);
 }
 
 bool DetectorModule::isEnabled() {

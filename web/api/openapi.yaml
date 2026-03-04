@@ -5,10 +5,37 @@ info:
   description: REST API for OUI SPY unified surveillance detection firmware
 
 servers:
+  - url: https://192.168.4.1
+    description: Device AP HTTPS (default)
   - url: http://192.168.4.1
-    description: Device AP (default)
+    description: Device AP HTTP (captive portal)
 
 paths:
+  /ca.cer:
+    get:
+      operationId: downloadCACertDER
+      summary: Download CA certificate in DER format (for iOS profile install)
+      responses:
+        "200":
+          description: DER certificate file
+          content:
+            application/x-x509-ca-cert:
+              schema:
+                type: string
+                format: binary
+
+  /ca.pem:
+    get:
+      operationId: downloadCACertPEM
+      summary: Download CA certificate in PEM format
+      responses:
+        "200":
+          description: PEM certificate file
+          content:
+            application/x-pem-file:
+              schema:
+                type: string
+
   /api/status:
     get:
       operationId: getStatus

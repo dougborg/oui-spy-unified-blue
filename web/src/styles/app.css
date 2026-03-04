@@ -48,3 +48,32 @@ body {
   background: var(--color-accent-dim);
   border-radius: 2px;
 }
+
+/* Spin animation for spinner component */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.animate-spin {
+  animation: spin 0.8s linear infinite;
+}
+
+/* Responsive: small phones (<375px) */
+@media (max-width: 374px) {
+  body {
+    font-size: 12px;
+  }
+}
+
+/* Responsive: tablets (>768px) */
+@media (min-width: 769px) {
+  body {
+    font-size: 15px;
+  }
+}
+
+/* Ensure minimum touch target sizes on mobile for primary actions */
+[role="switch"] {
+  min-height: 44px;
+}

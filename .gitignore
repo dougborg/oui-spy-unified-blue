@@ -17,3 +17,5 @@ src/web/dashboard_gz.h
 .env
 release/
 coverage-html/
+certs/
+src/web/certs/

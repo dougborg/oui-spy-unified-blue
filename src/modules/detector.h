@@ -2,6 +2,7 @@
 
 #include "../hal/ble_mgr.h"
 #include "module.h"
+#include <esp_http_server.h>
 #include <vector>
 
 struct DetDeviceInfo {
@@ -32,7 +33,7 @@ class DetectorModule : public IModule, public hal::BLEListener {
     }
     void setup() override;
     void loop() override;
-    void registerRoutes(AsyncWebServer& server) override;
+    void registerRoutes(httpd_handle_t https, httpd_handle_t http) override;
     bool isEnabled() override;
     void setEnabled(bool enabled) override;
 
@@ -54,7 +55,7 @@ class DetectorModule : public IModule, public hal::BLEListener {
     }
 
     // Public operations for route handlers
-    void parseFiltersFromRequest(AsyncWebServerRequest* request);
+    void parseFilters(const String& ouis, const String& macs);
     void setBuzzerEnabled(bool enabled) {
         _buzzerEnabled = enabled;
     }

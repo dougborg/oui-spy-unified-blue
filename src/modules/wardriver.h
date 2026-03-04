@@ -45,7 +45,7 @@ class WardriverModule : public IModule, public hal::BLEListener {
     }
     void setup() override;
     void loop() override;
-    void registerRoutes(AsyncWebServer& server) override;
+    void registerRoutes(httpd_handle_t https, httpd_handle_t http) override;
     bool isEnabled() override;
     void setEnabled(bool enabled) override;
 
@@ -79,7 +79,7 @@ class WardriverModule : public IModule, public hal::BLEListener {
     bool hasCsvFile() const;
 
     // Filter management
-    void parseFiltersFromRequest(AsyncWebServerRequest* request);
+    void parseFilters(const String& ouis, const String& macs);
     void saveFilters();
     void clearFilters();
 

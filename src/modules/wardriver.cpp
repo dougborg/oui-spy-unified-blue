@@ -463,53 +463,49 @@ void WardriverModule::checkWatchlist(const String& mac, int rssi, const String& 
 // Filter / Alias / Config Operations
 // ============================================================================
 
-void WardriverModule::parseFiltersFromRequest(AsyncWebServerRequest* request) {
+void WardriverModule::parseFilters(const String& ouis, const String& macs) {
     _filters.clear();
     // OUI entries
-    if (request->hasParam("ouis", true)) {
-        String data = request->getParam("ouis", true)->value();
-        data.trim();
-        if (data.length() > 0) {
-            int start = 0, end = data.indexOf('\n');
-            while (start < (int)data.length()) {
-                String line;
-                if (end == -1) {
-                    line = data.substring(start);
-                    start = data.length();
-                } else {
-                    line = data.substring(start, end);
-                    start = end + 1;
-                    end = data.indexOf('\n', start);
-                }
-                line.trim();
-                line.replace("\r", "");
-                if (line.length() >= 8) {
-                    _filters.push_back({line, false, "OUI: " + line});
-                }
+    String ouiData = ouis;
+    ouiData.trim();
+    if (ouiData.length() > 0) {
+        int start = 0, end = ouiData.indexOf('\n');
+        while (start < (int)ouiData.length()) {
+            String line;
+            if (end == -1) {
+                line = ouiData.substring(start);
+                start = ouiData.length();
+            } else {
+                line = ouiData.substring(start, end);
+                start = end + 1;
+                end = ouiData.indexOf('\n', start);
+            }
+            line.trim();
+            line.replace("\r", "");
+            if (line.length() >= 8) {
+                _filters.push_back({line, false, "OUI: " + line});
             }
         }
     }
     // MAC entries
-    if (request->hasParam("macs", true)) {
-        String data = request->getParam("macs", true)->value();
-        data.trim();
-        if (data.length() > 0) {
-            int start = 0, end = data.indexOf('\n');
-            while (start < (int)data.length()) {
-                String line;
-                if (end == -1) {
-                    line = data.substring(start);
-                    start = data.length();
-                } else {
-                    line = data.substring(start, end);
-                    start = end + 1;
-                    end = data.indexOf('\n', start);
-                }
-                line.trim();
-                line.replace("\r", "");
-                if (line.length() == 17) {
-                    _filters.push_back({line, true, "MAC: " + line});
-                }
+    String macData = macs;
+    macData.trim();
+    if (macData.length() > 0) {
+        int start = 0, end = macData.indexOf('\n');
+        while (start < (int)macData.length()) {
+            String line;
+            if (end == -1) {
+                line = macData.substring(start);
+                start = macData.length();
+            } else {
+                line = macData.substring(start, end);
+                start = end + 1;
+                end = macData.indexOf('\n', start);
+            }
+            line.trim();
+            line.replace("\r", "");
+            if (line.length() == 17) {
+                _filters.push_back({line, true, "MAC: " + line});
             }
         }
     }
@@ -571,8 +567,8 @@ void WardriverModule::setWigleConfig(const String& apiName, const String& apiTok
 // IModule Interface
 // ============================================================================
 
-void WardriverModule::registerRoutes(AsyncWebServer& server) {
-    registerWardriverRoutes(server, *this);
+void WardriverModule::registerRoutes(httpd_handle_t https, httpd_handle_t http) {
+    registerWardriverRoutes(https, http, *this);
 }
 
 bool WardriverModule::isEnabled() {

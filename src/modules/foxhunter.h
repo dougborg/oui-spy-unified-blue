@@ -2,6 +2,7 @@
 
 #include "../hal/ble_mgr.h"
 #include "module.h"
+#include <esp_http_server.h>
 
 class FoxhunterModule : public IModule, public hal::BLEListener {
   public:
@@ -10,7 +11,7 @@ class FoxhunterModule : public IModule, public hal::BLEListener {
     }
     void setup() override;
     void loop() override;
-    void registerRoutes(AsyncWebServer& server) override;
+    void registerRoutes(httpd_handle_t https, httpd_handle_t http) override;
     bool isEnabled() override;
     void setEnabled(bool enabled) override;
 

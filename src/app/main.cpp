@@ -4,7 +4,7 @@
  *
  * All detection modules run simultaneously with a single web dashboard.
  * No reboot needed to switch features — everything runs at once.
- * Connect to WiFi AP "oui-spy" and open http://192.168.4.1
+ * Connect to WiFi AP "oui-spy" and open https://ouispy.local
  *
  * SCAN MODE: One-shot reboot into STA-only WiFi promiscuous mode
  * for full drone Remote ID detection (NAN action frames on channel 6).
@@ -21,6 +21,7 @@
 #include "hal/gps.h"
 #include "hal/led.h"
 #include "hal/mac_util.h"
+#include "hal/mdns_setup.h"
 #include "hal/neopixel.h"
 #include "hal/notify.h"
 #include "hal/pins.h"
@@ -200,6 +201,10 @@ static void setupNormalMode() {
     String pass = storage::getAPPass();
     hal::wifiInit(ssid, pass);
 
+    // DNS Captive Portal + mDNS
+    hal::dnsServerStart();
+    hal::mdnsInit();
+
     // BLE init
     hal::bleInit();
 
@@ -225,15 +230,14 @@ static void setupNormalMode() {
     web::serverInit();
     web::registerSystemRoutes(modules, MODULE_COUNT);
 
-    AsyncWebServer& server = web::getServer();
+    // Register each module's web routes on both HTTPS + HTTP servers
+    httpd_handle_t https = web::getHTTPSServer();
+    httpd_handle_t http = web::getHTTPServer();
     for (int i = 0; i < MODULE_COUNT; i++) {
-        modules[i]->registerRoutes(server);
+        modules[i]->registerRoutes(https, http);
     }
 
     web::serverBegin();
-
-    // DNS captive portal (after web server)
-    hal::dnsInit();
 
     // BLE kick off
     hal::bleUpdate();
@@ -243,7 +247,8 @@ static void setupNormalMode() {
 
     Serial.println("\n========================================");
     Serial.printf("  WiFi AP: %s\n", ssid.c_str());
-    Serial.printf("  Dashboard: http://%s\n", hal::wifiGetAPIP().toString().c_str());
+    Serial.printf("  Dashboard: https://%s\n", hal::wifiGetAPIP().toString().c_str());
+    Serial.println("  mDNS: https://ouispy.local");
     Serial.println("  All modules active!");
     Serial.println("========================================\n");
 }
@@ -262,7 +267,6 @@ static void loopNormalMode() {
     hal::buzzerUpdate();
     hal::neopixelUpdate();
     hal::wifiUpdate();
-    hal::dnsUpdate();
 
     // Heartbeat (5s interval)
     static unsigned long lastHB = 0;
@@ -273,6 +277,10 @@ static void loopNormalMode() {
         lastHB = millis();
     }
 
+    // DNS captive portal (non-blocking)
+    hal::dnsServerLoop();
+
+    // Small yield to prevent WDT
     delay(10);
 }
 

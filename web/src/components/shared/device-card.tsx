@@ -1,4 +1,5 @@
 import type { ComponentChildren } from "preact";
+import { CopyButton } from "./copy-button";
 
 interface DeviceCardProps {
   mac: string;
@@ -11,6 +12,7 @@ export function DeviceCard({ mac, subtitle, children }: DeviceCardProps) {
     <div class="mb-1 rounded-md border border-border-dim bg-bg-card p-1.5">
       <div class="text-xs font-bold text-accent">
         {mac}
+        <CopyButton text={mac} />
         {subtitle && <span class="font-normal text-text-secondary"> {subtitle}</span>}
       </div>
       {children && <div class="mt-1 flex flex-wrap gap-1 text-[10px]">{children}</div>}

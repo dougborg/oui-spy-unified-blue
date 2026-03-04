@@ -2,6 +2,7 @@
 #include "../hal/gps.h"
 #include "../hal/neopixel.h"
 #include "../hal/notify.h"
+#include "../web/http_helpers.h"
 #include "../web/routes.h"
 #include "flockyou_logic.h"
 #include <LittleFS.h>
@@ -206,29 +207,29 @@ void FlockyouModule::promotePrevSession() {
 // JSON/KML Writers
 // ============================================================================
 
-void FlockyouModule::writeJSON(AsyncResponseStream* resp) {
-    resp->print("[");
+void FlockyouModule::writeJSON(Print& out) {
+    out.print("[");
     if (_mutex && xSemaphoreTake(_mutex, pdMS_TO_TICKS(200)) == pdTRUE) {
         for (int i = 0; i < _detCount; i++) {
             if (i > 0)
-                resp->print(",");
-            resp->printf("{\"mac\":\"%s\",\"name\":\"%s\",\"rssi\":%d,\"method\":\"%s\","
-                         "\"first\":%lu,\"last\":%lu,\"count\":%d,\"raven\":%s,\"fw\":\"%s\"",
-                         _det[i].mac, _det[i].name, _det[i].rssi, _det[i].method, _det[i].firstSeen,
-                         _det[i].lastSeen, _det[i].count, _det[i].isRaven ? "true" : "false",
-                         _det[i].ravenFW);
+                out.print(",");
+            out.printf("{\"mac\":\"%s\",\"name\":\"%s\",\"rssi\":%d,\"method\":\"%s\","
+                       "\"first\":%lu,\"last\":%lu,\"count\":%d,\"raven\":%s,\"fw\":\"%s\"",
+                       _det[i].mac, _det[i].name, _det[i].rssi, _det[i].method, _det[i].firstSeen,
+                       _det[i].lastSeen, _det[i].count, _det[i].isRaven ? "true" : "false",
+                       _det[i].ravenFW);
             if (_det[i].hasGPS)
-                resp->printf(",\"gps\":{\"lat\":%.8f,\"lon\":%.8f,\"acc\":%.1f}", _det[i].gpsLat,
-                             _det[i].gpsLon, _det[i].gpsAcc);
-            resp->print("}");
+                out.printf(",\"gps\":{\"lat\":%.8f,\"lon\":%.8f,\"acc\":%.1f}", _det[i].gpsLat,
+                           _det[i].gpsLon, _det[i].gpsAcc);
+            out.print("}");
         }
         xSemaphoreGive(_mutex);
     }
-    resp->print("]");
+    out.print("]");
 }
 
-void FlockyouModule::writeKML(AsyncResponseStream* resp) {
-    resp->print(
+void FlockyouModule::writeKML(Print& out) {
+    out.print(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<kml "
         "xmlns=\"http://www.opengis.net/kml/2.2\">\n<Document>\n"
         "<name>Flock-You Detections</name>\n"
@@ -241,22 +242,22 @@ void FlockyouModule::writeKML(AsyncResponseStream* resp) {
             FYDetection& d = _det[i];
             if (!d.hasGPS)
                 continue;
-            resp->printf("<Placemark><name>%s</name><styleUrl>#%s</styleUrl>"
-                         "<description><![CDATA[",
-                         d.mac, d.isRaven ? "raven" : "det");
+            out.printf("<Placemark><name>%s</name><styleUrl>#%s</styleUrl>"
+                       "<description><![CDATA[",
+                       d.mac, d.isRaven ? "raven" : "det");
             if (d.name[0])
-                resp->printf("<b>Name:</b> %s<br/>", d.name);
-            resp->printf("<b>Method:</b> %s<br/><b>RSSI:</b> %d<br/><b>Count:</b> %d", d.method,
-                         d.rssi, d.count);
+                out.printf("<b>Name:</b> %s<br/>", d.name);
+            out.printf("<b>Method:</b> %s<br/><b>RSSI:</b> %d<br/><b>Count:</b> %d", d.method,
+                       d.rssi, d.count);
             if (d.isRaven)
-                resp->printf("<br/><b>FW:</b> %s", d.ravenFW);
-            resp->printf("]]></description><Point><coordinates>%.8f,%.8f,0</coordinates></Point></"
-                         "Placemark>\n",
-                         d.gpsLon, d.gpsLat);
+                out.printf("<br/><b>FW:</b> %s", d.ravenFW);
+            out.printf("]]></description><Point><coordinates>%.8f,%.8f,0</coordinates></Point></"
+                       "Placemark>\n",
+                       d.gpsLon, d.gpsLat);
         }
         xSemaphoreGive(_mutex);
     }
-    resp->print("</Document>\n</kml>");
+    out.print("</Document>\n</kml>");
 }
 
 // ============================================================================
@@ -397,71 +398,67 @@ void FlockyouModule::onBLEAdvertisement(NimBLEAdvertisedDevice* dev) {
 // Public Operations (used by route handlers)
 // ============================================================================
 
-void FlockyouModule::writeCSV(AsyncResponseStream* resp) {
-    resp->println("mac,name,rssi,method,first_seen_ms,last_seen_ms,count,is_raven,raven_fw,"
-                  "latitude,longitude,gps_accuracy");
+void FlockyouModule::writeCSV(Print& out) {
+    out.println("mac,name,rssi,method,first_seen_ms,last_seen_ms,count,is_raven,raven_fw,"
+                "latitude,longitude,gps_accuracy");
     if (_mutex && xSemaphoreTake(_mutex, pdMS_TO_TICKS(200)) == pdTRUE) {
         for (int i = 0; i < _detCount; i++) {
             FYDetection& d = _det[i];
             if (d.hasGPS) {
-                resp->printf("\"%s\",\"%s\",%d,\"%s\",%lu,%lu,%d,%s,\"%s\",%.8f,%.8f,%.1f\n", d.mac,
-                             d.name, d.rssi, d.method, d.firstSeen, d.lastSeen, d.count,
-                             d.isRaven ? "true" : "false", d.ravenFW, d.gpsLat, d.gpsLon, d.gpsAcc);
+                out.printf("\"%s\",\"%s\",%d,\"%s\",%lu,%lu,%d,%s,\"%s\",%.8f,%.8f,%.1f\n", d.mac,
+                           d.name, d.rssi, d.method, d.firstSeen, d.lastSeen, d.count,
+                           d.isRaven ? "true" : "false", d.ravenFW, d.gpsLat, d.gpsLon, d.gpsAcc);
             } else {
-                resp->printf("\"%s\",\"%s\",%d,\"%s\",%lu,%lu,%d,%s,\"%s\",,,\n", d.mac, d.name,
-                             d.rssi, d.method, d.firstSeen, d.lastSeen, d.count,
-                             d.isRaven ? "true" : "false", d.ravenFW);
+                out.printf("\"%s\",\"%s\",%d,\"%s\",%lu,%lu,%d,%s,\"%s\",,,\n", d.mac, d.name,
+                           d.rssi, d.method, d.firstSeen, d.lastSeen, d.count,
+                           d.isRaven ? "true" : "false", d.ravenFW);
             }
         }
         xSemaphoreGive(_mutex);
     }
 }
 
-void FlockyouModule::writePatterns(AsyncResponseStream* resp) {
-    resp->print("{\"macs\":[");
+void FlockyouModule::writePatterns(Print& out) {
+    out.print("{\"macs\":[");
     for (size_t i = 0; i < sizeof(fyMACPrefixes) / sizeof(fyMACPrefixes[0]); i++) {
         if (i > 0)
-            resp->print(",");
-        resp->printf("\"%s\"", fyMACPrefixes[i]);
+            out.print(",");
+        out.printf("\"%s\"", fyMACPrefixes[i]);
     }
-    resp->print("],\"names\":[");
+    out.print("],\"names\":[");
     for (size_t i = 0; i < sizeof(fyNamePatterns) / sizeof(fyNamePatterns[0]); i++) {
         if (i > 0)
-            resp->print(",");
-        resp->printf("\"%s\"", fyNamePatterns[i]);
+            out.print(",");
+        out.printf("\"%s\"", fyNamePatterns[i]);
     }
-    resp->print("],\"mfr\":[");
+    out.print("],\"mfr\":[");
     for (size_t i = 0; i < sizeof(fyMfrIDs) / sizeof(fyMfrIDs[0]); i++) {
         if (i > 0)
-            resp->print(",");
-        resp->printf("%u", fyMfrIDs[i]);
+            out.print(",");
+        out.printf("%u", fyMfrIDs[i]);
     }
-    resp->print("],\"raven\":[");
+    out.print("],\"raven\":[");
     for (size_t i = 0; i < sizeof(fyRavenUUIDs) / sizeof(fyRavenUUIDs[0]); i++) {
         if (i > 0)
-            resp->print(",");
-        resp->printf("\"%s\"", fyRavenUUIDs[i]);
+            out.print(",");
+        out.printf("\"%s\"", fyRavenUUIDs[i]);
     }
-    resp->print("]}");
+    out.print("]}");
 }
 
-void FlockyouModule::serveHistory(AsyncWebServerRequest* r) {
+esp_err_t FlockyouModule::serveHistory(httpd_req_t* req) {
     if (_fsReady && LittleFS.exists(FY_PREV_FILE)) {
-        r->send(LittleFS, FY_PREV_FILE, "application/json");
-    } else {
-        r->send(200, "application/json", "[]");
+        return web::sendFile(req, LittleFS, FY_PREV_FILE, "application/json", nullptr);
     }
+    return web::sendJSON(req, 200, "[]");
 }
 
-void FlockyouModule::serveHistoryDownload(AsyncWebServerRequest* r) {
+esp_err_t FlockyouModule::serveHistoryDownload(httpd_req_t* req) {
     if (_fsReady && LittleFS.exists(FY_PREV_FILE)) {
-        AsyncWebServerResponse* resp = r->beginResponse(LittleFS, FY_PREV_FILE, "application/json");
-        resp->addHeader("Content-Disposition",
-                        "attachment; filename=\"flockyou_prev_session.json\"");
-        r->send(resp);
-    } else {
-        r->send(404, "application/json", "{\"error\":\"no prior session\"}");
+        return web::sendFile(req, LittleFS, FY_PREV_FILE, "application/json",
+                             "attachment; filename=\"flockyou_prev_session.json\"");
     }
+    return web::sendError(req, 404, "no prior session");
 }
 
 void FlockyouModule::clearDetections() {
@@ -479,8 +476,8 @@ void FlockyouModule::clearDetections() {
 // Web Routes
 // ============================================================================
 
-void FlockyouModule::registerRoutes(AsyncWebServer& server) {
-    registerFlockyouRoutes(server, *this);
+void FlockyouModule::registerRoutes(httpd_handle_t https, httpd_handle_t http) {
+    registerFlockyouRoutes(https, http, *this);
 }
 
 bool FlockyouModule::isEnabled() {

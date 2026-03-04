@@ -110,8 +110,8 @@ void FoxhunterModule::clearTarget() {
 // Web Routes
 // ============================================================================
 
-void FoxhunterModule::registerRoutes(AsyncWebServer& server) {
-    registerFoxhunterRoutes(server, *this);
+void FoxhunterModule::registerRoutes(httpd_handle_t https, httpd_handle_t http) {
+    registerFoxhunterRoutes(https, http, *this);
 }
 
 bool FoxhunterModule::isEnabled() {

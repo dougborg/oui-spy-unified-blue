@@ -1,4 +1,6 @@
 #include "wifi_mgr.h"
+#include <dhcpserver/dhcpserver.h>
+#include <dhcpserver/dhcpserver_options.h>
 
 namespace hal {
 
@@ -28,7 +30,13 @@ void wifiInit(const String& ssid, const String& password) {
 
     delay(500); // Let DHCP server settle
 
-    Serial.printf("[HAL] AP IP: %s\n", WiFi.softAPIP().toString().c_str());
+    // Configure DHCP server to advertise our AP IP as DNS server
+    // This enables the captive portal DNS to intercept all queries
+    IPAddress apIP = WiFi.softAPIP();
+    dhcps_offer_t offer = OFFER_DNS;
+    dhcps_set_option_info(6, &offer, sizeof(offer));
+
+    Serial.printf("[HAL] AP IP: %s\n", apIP.toString().c_str());
     _apRunning = ok;
     _scanMode = false;
 }

@@ -1,105 +1,153 @@
 #include "../hal/gps.h"
 #include "../modules/flockyou.h"
+#include "http_helpers.h"
 #include "routes.h"
 #include <ArduinoJson.h>
-#include <ESPAsyncWebServer.h>
+#include <LittleFS.h>
 
-void registerFlockyouRoutes(AsyncWebServer& server, FlockyouModule& mod) {
-    server.on("/api/flockyou/detections", HTTP_GET, [&mod](AsyncWebServerRequest* r) {
-        AsyncResponseStream* resp = r->beginResponseStream("application/json");
-        mod.writeJSON(resp);
-        r->send(resp);
-    });
+static FlockyouModule* _fyMod = nullptr;
 
-    server.on("/api/flockyou/stats", HTTP_GET, [&mod](AsyncWebServerRequest* r) {
-        int raven = 0, withGPS = 0;
-        SemaphoreHandle_t mtx = mod.mutex();
-        if (mtx && xSemaphoreTake(mtx, pdMS_TO_TICKS(100)) == pdTRUE) {
-            const FYDetection* dets = mod.detections();
-            int count = mod.detectionCount();
-            for (int i = 0; i < count; i++) {
-                if (dets[i].isRaven)
-                    raven++;
-                if (dets[i].hasGPS)
-                    withGPS++;
-            }
-            xSemaphoreGive(mtx);
+// Detections JSON (chunked streaming)
+static esp_err_t handleFYDetections(httpd_req_t* req) {
+    web::ChunkedPrint print(req, "application/json");
+    _fyMod->writeJSON(print);
+    return print.end();
+}
+
+// Stats
+static esp_err_t handleFYStats(httpd_req_t* req) {
+    int raven = 0, withGPS = 0;
+    SemaphoreHandle_t mtx = _fyMod->mutex();
+    if (mtx && xSemaphoreTake(mtx, pdMS_TO_TICKS(100)) == pdTRUE) {
+        const FYDetection* dets = _fyMod->detections();
+        int count = _fyMod->detectionCount();
+        for (int i = 0; i < count; i++) {
+            if (dets[i].isRaven)
+                raven++;
+            if (dets[i].hasGPS)
+                withGPS++;
         }
-        const hal::GPSData& g = hal::gpsGet();
-        const char* gpsSrc = "none";
-        if (g.isHardware && g.hwFix)
-            gpsSrc = "hw";
-        else if (hal::gpsIsFresh())
-            gpsSrc = "phone";
-        JsonDocument doc;
-        doc["total"] = mod.detectionCount();
-        doc["raven"] = raven;
-        doc["ble"] = "active";
-        doc["gps_valid"] = hal::gpsIsFresh();
-        doc["gps_tagged"] = withGPS;
-        doc["gps_src"] = gpsSrc;
-        doc["gps_sats"] = g.satellites;
-        doc["gps_hw_detected"] = g.hwDetected;
-        String json;
-        serializeJson(doc, json);
-        r->send(200, "application/json", json);
-    });
+        xSemaphoreGive(mtx);
+    }
+    const hal::GPSData& g = hal::gpsGet();
+    const char* gpsSrc = "none";
+    if (g.isHardware && g.hwFix)
+        gpsSrc = "hw";
+    else if (hal::gpsIsFresh())
+        gpsSrc = "phone";
+    JsonDocument doc;
+    doc["total"] = _fyMod->detectionCount();
+    doc["raven"] = raven;
+    doc["ble"] = "active";
+    doc["gps_valid"] = hal::gpsIsFresh();
+    doc["gps_tagged"] = withGPS;
+    doc["gps_src"] = gpsSrc;
+    doc["gps_sats"] = g.satellites;
+    doc["gps_hw_detected"] = g.hwDetected;
+    String json;
+    serializeJson(doc, json);
+    return web::sendJSON(req, 200, json.c_str());
+}
 
-    server.on("/api/flockyou/gps", HTTP_GET, [](AsyncWebServerRequest* r) {
-        const hal::GPSData& g = hal::gpsGet();
-        if (g.hwFix) {
-            r->send(200, "application/json",
-                    "{\"status\":\"ignored\",\"reason\":\"hw_gps_active\"}");
-            return;
-        }
-        if (r->hasParam("lat") && r->hasParam("lon")) {
-            double lat = r->getParam("lat")->value().toDouble();
-            double lon = r->getParam("lon")->value().toDouble();
-            float acc = r->hasParam("acc") ? r->getParam("acc")->value().toFloat() : 0;
-            hal::gpsSetFromPhone(lat, lon, acc);
-            r->send(200, "application/json", "{\"status\":\"ok\"}");
-        } else {
-            r->send(400, "application/json", "{\"error\":\"lat,lon required\"}");
-        }
-    });
+// GPS submit (query params)
+static esp_err_t handleFYGPS(httpd_req_t* req) {
+    const hal::GPSData& g = hal::gpsGet();
+    if (g.hwFix)
+        return web::sendJSON(req, 200, "{\"status\":\"ignored\",\"reason\":\"hw_gps_active\"}");
 
-    server.on("/api/flockyou/patterns", HTTP_GET, [&mod](AsyncWebServerRequest* r) {
-        AsyncResponseStream* resp = r->beginResponseStream("application/json");
-        mod.writePatterns(resp);
-        r->send(resp);
-    });
+    String lat, lon, acc;
+    if (!web::getQueryParam(req, "lat", lat) || !web::getQueryParam(req, "lon", lon))
+        return web::sendError(req, 400, "lat,lon required");
 
-    server.on("/api/flockyou/export/json", HTTP_GET, [&mod](AsyncWebServerRequest* r) {
-        AsyncResponseStream* resp = r->beginResponseStream("application/json");
-        resp->addHeader("Content-Disposition", "attachment; filename=\"flockyou_detections.json\"");
-        mod.writeJSON(resp);
-        r->send(resp);
-    });
+    float accVal = 0;
+    if (web::getQueryParam(req, "acc", acc))
+        accVal = acc.toFloat();
 
-    server.on("/api/flockyou/export/csv", HTTP_GET, [&mod](AsyncWebServerRequest* r) {
-        AsyncResponseStream* resp = r->beginResponseStream("text/csv");
-        resp->addHeader("Content-Disposition", "attachment; filename=\"flockyou_detections.csv\"");
-        mod.writeCSV(resp);
-        r->send(resp);
-    });
+    hal::gpsSetFromPhone(lat.toDouble(), lon.toDouble(), accVal);
+    return web::sendJSON(req, 200, "{\"status\":\"ok\"}");
+}
 
-    server.on("/api/flockyou/export/kml", HTTP_GET, [&mod](AsyncWebServerRequest* r) {
-        AsyncResponseStream* resp = r->beginResponseStream("application/vnd.google-earth.kml+xml");
-        resp->addHeader("Content-Disposition", "attachment; filename=\"flockyou_detections.kml\"");
-        mod.writeKML(resp);
-        r->send(resp);
-    });
+// Patterns (chunked streaming)
+static esp_err_t handleFYPatterns(httpd_req_t* req) {
+    web::ChunkedPrint print(req, "application/json");
+    _fyMod->writePatterns(print);
+    return print.end();
+}
 
-    server.on("/api/flockyou/history", HTTP_GET,
-              [&mod](AsyncWebServerRequest* r) { mod.serveHistory(r); });
+// Export JSON
+static esp_err_t handleFYExportJSON(httpd_req_t* req) {
+    web::ChunkedPrint print(req, "application/json");
+    httpd_resp_set_hdr(req, "Content-Disposition",
+                       "attachment; filename=\"flockyou_detections.json\"");
+    _fyMod->writeJSON(print);
+    return print.end();
+}
 
-    server.on("/api/flockyou/history/json", HTTP_GET,
-              [&mod](AsyncWebServerRequest* r) { mod.serveHistoryDownload(r); });
+// Export CSV
+static esp_err_t handleFYExportCSV(httpd_req_t* req) {
+    web::ChunkedPrint print(req, "text/csv");
+    httpd_resp_set_hdr(req, "Content-Disposition",
+                       "attachment; filename=\"flockyou_detections.csv\"");
+    _fyMod->writeCSV(print);
+    return print.end();
+}
 
-    server.on("/api/flockyou/clear", HTTP_GET, [&mod](AsyncWebServerRequest* r) {
-        mod.clearDetections();
-        r->send(200, "application/json", "{\"status\":\"cleared\"}");
-    });
+// Export KML
+static esp_err_t handleFYExportKML(httpd_req_t* req) {
+    web::ChunkedPrint print(req, "application/vnd.google-earth.kml+xml");
+    httpd_resp_set_hdr(req, "Content-Disposition",
+                       "attachment; filename=\"flockyou_detections.kml\"");
+    _fyMod->writeKML(print);
+    return print.end();
+}
+
+// History (serve file)
+static esp_err_t handleFYHistory(httpd_req_t* req) {
+    return _fyMod->serveHistory(req);
+}
+
+// History download
+static esp_err_t handleFYHistoryDownload(httpd_req_t* req) {
+    return _fyMod->serveHistoryDownload(req);
+}
+
+// Clear detections
+static esp_err_t handleFYClear(httpd_req_t* req) {
+    _fyMod->clearDetections();
+    return web::sendJSON(req, 200, "{\"status\":\"cleared\"}");
+}
+
+void registerFlockyouRoutes(httpd_handle_t https, httpd_handle_t http, FlockyouModule& mod) {
+    _fyMod = &mod;
+
+    static const httpd_uri_t detectionsUri = {"/api/flockyou/detections", HTTP_GET,
+                                              handleFYDetections, nullptr};
+    static const httpd_uri_t statsUri = {"/api/flockyou/stats", HTTP_GET, handleFYStats, nullptr};
+    static const httpd_uri_t gpsUri = {"/api/flockyou/gps", HTTP_GET, handleFYGPS, nullptr};
+    static const httpd_uri_t patternsUri = {"/api/flockyou/patterns", HTTP_GET, handleFYPatterns,
+                                            nullptr};
+    static const httpd_uri_t exportJsonUri = {"/api/flockyou/export/json", HTTP_GET,
+                                              handleFYExportJSON, nullptr};
+    static const httpd_uri_t exportCsvUri = {"/api/flockyou/export/csv", HTTP_GET,
+                                             handleFYExportCSV, nullptr};
+    static const httpd_uri_t exportKmlUri = {"/api/flockyou/export/kml", HTTP_GET,
+                                             handleFYExportKML, nullptr};
+    static const httpd_uri_t historyUri = {"/api/flockyou/history", HTTP_GET, handleFYHistory,
+                                           nullptr};
+    static const httpd_uri_t historyDlUri = {"/api/flockyou/history/json", HTTP_GET,
+                                             handleFYHistoryDownload, nullptr};
+    static const httpd_uri_t clearUri = {"/api/flockyou/clear", HTTP_GET, handleFYClear, nullptr};
+
+    web::registerOnBoth(https, http, &detectionsUri);
+    web::registerOnBoth(https, http, &statsUri);
+    web::registerOnBoth(https, http, &gpsUri);
+    web::registerOnBoth(https, http, &patternsUri);
+    web::registerOnBoth(https, http, &exportJsonUri);
+    web::registerOnBoth(https, http, &exportCsvUri);
+    web::registerOnBoth(https, http, &exportKmlUri);
+    web::registerOnBoth(https, http, &historyUri);
+    web::registerOnBoth(https, http, &historyDlUri);
+    web::registerOnBoth(https, http, &clearUri);
 
     Serial.println("[FLOCKYOU] Web routes registered");
 }

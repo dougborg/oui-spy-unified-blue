@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
-#include <ESPAsyncWebServer.h>
+#include <esp_http_server.h>
 
 // ============================================================================
 // Module Interface — core lifecycle contract for all detection modules
@@ -17,6 +17,6 @@ class IModule {
     virtual bool isEnabled() = 0;
     virtual void setEnabled(bool enabled) = 0;
 
-    // Route registration (modules delegate to free functions in src/web/)
-    virtual void registerRoutes(AsyncWebServer& server) = 0;
+    // Route registration — modules register on both HTTPS and HTTP servers
+    virtual void registerRoutes(httpd_handle_t https, httpd_handle_t http) = 0;
 };

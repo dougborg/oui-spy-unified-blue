@@ -2,6 +2,7 @@
 
 #include "../hal/ble_mgr.h"
 #include "module.h"
+#include <esp_http_server.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 
@@ -30,7 +31,7 @@ class FlockyouModule : public IModule, public hal::BLEListener {
     }
     void setup() override;
     void loop() override;
-    void registerRoutes(AsyncWebServer& server) override;
+    void registerRoutes(httpd_handle_t https, httpd_handle_t http) override;
     bool isEnabled() override;
     void setEnabled(bool enabled) override;
 
@@ -52,14 +53,14 @@ class FlockyouModule : public IModule, public hal::BLEListener {
     }
 
     // Public operations for route handlers
-    void writeJSON(AsyncResponseStream* resp);
-    void writeKML(AsyncResponseStream* resp);
-    void writeCSV(AsyncResponseStream* resp);
-    void writePatterns(AsyncResponseStream* resp);
+    void writeJSON(Print& out);
+    void writeKML(Print& out);
+    void writeCSV(Print& out);
+    void writePatterns(Print& out);
     void clearDetections();
     void saveSession();
-    void serveHistory(AsyncWebServerRequest* r);
-    void serveHistoryDownload(AsyncWebServerRequest* r);
+    esp_err_t serveHistory(httpd_req_t* req);
+    esp_err_t serveHistoryDownload(httpd_req_t* req);
 
   private:
     bool _enabled = true;

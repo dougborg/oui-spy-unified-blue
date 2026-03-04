@@ -1,57 +1,75 @@
 #include "../modules/detector_logic.h"
 #include "../modules/foxhunter.h"
+#include "http_helpers.h"
 #include "routes.h"
 #include <ArduinoJson.h>
-#include <ESPAsyncWebServer.h>
 
-void registerFoxhunterRoutes(AsyncWebServer& server, FoxhunterModule& mod) {
-    // Get current target and RSSI
-    server.on("/api/foxhunter/status", HTTP_GET, [&mod](AsyncWebServerRequest* r) {
-        JsonDocument doc;
-        doc["target"] = mod.targetMAC();
-        doc["detected"] = mod.targetDetected();
-        doc["rssi"] = mod.currentRSSI();
-        doc["lastSeen"] = mod.lastTargetSeen();
-        String json;
-        serializeJson(doc, json);
-        r->send(200, "application/json", json);
-    });
+static FoxhunterModule* _foxMod = nullptr;
 
-    // Set target MAC (with validation)
-    server.on("/api/foxhunter/target", HTTP_POST, [&mod](AsyncWebServerRequest* r) {
-        if (r->hasParam("mac", true)) {
-            String mac = r->getParam("mac", true)->value();
-            mac.trim();
-            if (mac.length() > 0 && !detector_logic::isValidMac(mac.c_str())) {
-                r->send(400, "application/json", "{\"error\":\"invalid MAC format\"}");
-                return;
-            }
-            mod.setTarget(mac);
-            JsonDocument doc;
-            doc["target"] = mod.targetMAC();
-            String json;
-            serializeJson(doc, json);
-            r->send(200, "application/json", json);
-        } else {
-            r->send(400, "application/json", "{\"error\":\"missing mac\"}");
-        }
-    });
+// Get current target and RSSI
+static esp_err_t handleFoxStatus(httpd_req_t* req) {
+    JsonDocument doc;
+    doc["target"] = _foxMod->targetMAC();
+    doc["detected"] = _foxMod->targetDetected();
+    doc["rssi"] = _foxMod->currentRSSI();
+    doc["lastSeen"] = _foxMod->lastTargetSeen();
+    String json;
+    serializeJson(doc, json);
+    return web::sendJSON(req, 200, json.c_str());
+}
 
-    // Get live RSSI (for polling)
-    server.on("/api/foxhunter/rssi", HTTP_GET, [&mod](AsyncWebServerRequest* r) {
-        JsonDocument doc;
-        doc["rssi"] = mod.currentRSSI();
-        doc["detected"] = mod.targetDetected();
-        String json;
-        serializeJson(doc, json);
-        r->send(200, "application/json", json);
-    });
+// Set target MAC
+static esp_err_t handleFoxSetTarget(httpd_req_t* req) {
+    char body[128];
+    if (web::readFormBody(req, body, sizeof(body)) < 0)
+        return web::sendError(req, 400, "bad request");
 
-    // Clear target
-    server.on("/api/foxhunter/clear", HTTP_POST, [&mod](AsyncWebServerRequest* r) {
-        mod.clearTarget();
-        r->send(200, "application/json", "{\"cleared\":true}");
-    });
+    String mac;
+    if (!web::getFormValue(body, "mac", mac))
+        return web::sendError(req, 400, "missing mac");
+
+    mac.trim();
+    if (mac.length() > 0 && !detector_logic::isValidMac(mac.c_str()))
+        return web::sendError(req, 400, "invalid MAC format");
+
+    _foxMod->setTarget(mac);
+    JsonDocument doc;
+    doc["target"] = _foxMod->targetMAC();
+    String json;
+    serializeJson(doc, json);
+    return web::sendJSON(req, 200, json.c_str());
+}
+
+// Get live RSSI
+static esp_err_t handleFoxRSSI(httpd_req_t* req) {
+    JsonDocument doc;
+    doc["rssi"] = _foxMod->currentRSSI();
+    doc["detected"] = _foxMod->targetDetected();
+    String json;
+    serializeJson(doc, json);
+    return web::sendJSON(req, 200, json.c_str());
+}
+
+// Clear target
+static esp_err_t handleFoxClear(httpd_req_t* req) {
+    _foxMod->clearTarget();
+    return web::sendJSON(req, 200, "{\"cleared\":true}");
+}
+
+void registerFoxhunterRoutes(httpd_handle_t https, httpd_handle_t http, FoxhunterModule& mod) {
+    _foxMod = &mod;
+
+    static const httpd_uri_t statusUri = {"/api/foxhunter/status", HTTP_GET, handleFoxStatus,
+                                          nullptr};
+    static const httpd_uri_t targetUri = {"/api/foxhunter/target", HTTP_POST, handleFoxSetTarget,
+                                          nullptr};
+    static const httpd_uri_t rssiUri = {"/api/foxhunter/rssi", HTTP_GET, handleFoxRSSI, nullptr};
+    static const httpd_uri_t clearUri = {"/api/foxhunter/clear", HTTP_POST, handleFoxClear, nullptr};
+
+    web::registerOnBoth(https, http, &statusUri);
+    web::registerOnBoth(https, http, &targetUri);
+    web::registerOnBoth(https, http, &rssiUri);
+    web::registerOnBoth(https, http, &clearUri);
 
     Serial.println("[FOXHUNTER] Web routes registered");
 }
