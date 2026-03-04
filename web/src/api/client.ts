@@ -1,125 +1,50 @@
-// Lightweight typed fetch wrapper for the OUI SPY API
-// Types are inferred from the actual API responses since the device is the source of truth
+// Typed API client generated from OpenAPI schema
+import createClient from "openapi-fetch";
+import type { paths, components } from "./schema";
 
-export interface SystemStatus {
-  uptime: number;
-  heap: number;
-  psram: number;
-  buzzer: boolean;
-}
+// Schema-derived type aliases for component use
+export type SystemStatus = components["schemas"]["SystemStatus"];
+export type Module = components["schemas"]["Module"];
+export type GPSData = components["schemas"]["GPSData"];
+export type APConfig = components["schemas"]["APConfig"];
+export type DetectorFilter = components["schemas"]["DetectorFilter"];
+export type DetectorDevice = components["schemas"]["DetectorDevice"];
+export type FoxhunterStatus = components["schemas"]["FoxhunterStatus"];
+export type FoxhunterRSSI = components["schemas"]["FoxhunterRSSI"];
+export type FlockyouDetection = components["schemas"]["FlockyouDetection"];
+export type FlockyouStats = components["schemas"]["FlockyouStats"];
+export type SkyspyDrone = components["schemas"]["SkyspyDrone"];
+export type SkyspyStatus = components["schemas"]["SkyspyStatus"];
 
-export interface Module {
-  name: string;
-  enabled: boolean;
-}
+export const api = createClient<paths>({
+  baseUrl: "",
+  bodySerializer: (body) =>
+    new URLSearchParams(body as unknown as Record<string, string>).toString(),
+  headers: { "Content-Type": "application/x-www-form-urlencoded" },
+});
 
-export interface GPSData {
-  valid: boolean;
-  lat: number;
-  lon: number;
-  acc: number;
-  hardware: boolean;
-  hw_detected: boolean;
-  hw_fix: boolean;
-  sats: number;
-  fresh: boolean;
-}
-
-export interface APConfig {
-  ssid: string;
-}
-
-export interface DetectorFilter {
-  id: string;
-  full: boolean;
-  desc: string;
-}
-
-export interface DetectorDevice {
-  mac: string;
-  rssi: number;
-  filter: string;
-  alias: string;
-  timeSince: number;
-}
-
-export interface FoxhunterStatus {
-  target: string;
-  detected: boolean;
-  rssi: number;
-  lastSeen: number;
-}
-
-export interface FoxhunterRSSI {
-  rssi: number;
-  detected: boolean;
-}
-
-export interface FlockyouDetection {
-  mac: string;
-  name: string;
-  rssi: number;
-  method: string;
-  count: number;
-  raven: boolean;
-  fw: string;
-  gps: boolean;
-  last: number;
-}
-
-export interface FlockyouStats {
-  total: number;
-  raven: number;
-  ble: string;
-  gps_valid: boolean;
-  gps_tagged: number;
-  gps_src: string;
-  gps_sats: number;
-  gps_hw_detected: boolean;
-}
-
-export interface SkyspyDrone {
-  mac: string;
-  rssi: number;
-  drone_lat: number;
-  drone_long: number;
-  altitude: number;
-  height: number;
-  speed: number;
-  heading: number;
-  pilot_lat: number;
-  pilot_long: number;
-  uav_id: string;
-  op_id: string;
-  last_seen: number;
-}
-
-export interface SkyspyStatus {
-  active_drones: number;
-  in_range: boolean;
-}
-
-async function api<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, init);
+// Lightweight fetch helper for polling (avoids openapi-fetch overhead per poll)
+export async function fetchJSON<T>(url: string): Promise<T> {
+  const res = await fetch(url);
   if (!res.ok) throw new Error(`API ${res.status}: ${url}`);
   return res.json();
-}
-
-export async function fetchJSON<T>(url: string): Promise<T> {
-  return api<T>(url);
 }
 
 export async function postForm<T>(
   url: string,
   params: Record<string, string>,
 ): Promise<T> {
-  return api<T>(url, {
+  const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams(params).toString(),
   });
+  if (!res.ok) throw new Error(`API ${res.status}: ${url}`);
+  return res.json();
 }
 
 export async function postEmpty<T>(url: string): Promise<T> {
-  return api<T>(url, { method: "POST" });
+  const res = await fetch(url, { method: "POST" });
+  if (!res.ok) throw new Error(`API ${res.status}: ${url}`);
+  return res.json();
 }

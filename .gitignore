@@ -12,3 +12,4 @@ coverage-native.xml
 *.gcno
 web/node_modules/
 web/dist/
+web/src/api/schema.d.ts

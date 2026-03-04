@@ -506,6 +506,7 @@ components:
   schemas:
     SystemStatus:
       type: object
+      required: [uptime, heap, psram, buzzer]
       properties:
         uptime:
           type: integer
@@ -521,6 +522,7 @@ components:
 
     Module:
       type: object
+      required: [name, enabled]
       properties:
         name:
           type: string
@@ -529,6 +531,7 @@ components:
 
     GPSData:
       type: object
+      required: [valid, lat, lon, acc, hardware, hw_detected, hw_fix, sats, fresh]
       properties:
         valid:
           type: boolean
@@ -551,12 +554,14 @@ components:
 
     APConfig:
       type: object
+      required: [ssid]
       properties:
         ssid:
           type: string
 
     DetectorFilter:
       type: object
+      required: [id, full, desc]
       properties:
         id:
           type: string
@@ -567,6 +572,7 @@ components:
 
     DetectorDevice:
       type: object
+      required: [mac, rssi, filter, alias, timeSince]
       properties:
         mac:
           type: string
@@ -581,6 +587,7 @@ components:
 
     FoxhunterStatus:
       type: object
+      required: [target, detected, rssi, lastSeen]
       properties:
         target:
           type: string
@@ -593,6 +600,7 @@ components:
 
     FoxhunterRSSI:
       type: object
+      required: [rssi, detected]
       properties:
         rssi:
           type: integer
@@ -601,6 +609,7 @@ components:
 
     FlockyouDetection:
       type: object
+      required: [mac, name, rssi, method, count, raven, fw, gps, last]
       properties:
         mac:
           type: string
@@ -623,6 +632,7 @@ components:
 
     FlockyouStats:
       type: object
+      required: [total, raven, ble, gps_valid, gps_tagged, gps_src, gps_sats, gps_hw_detected]
       properties:
         total:
           type: integer
@@ -643,6 +653,7 @@ components:
 
     SkyspyDrone:
       type: object
+      required: [mac, rssi, drone_lat, drone_long, altitude, height, speed, heading, pilot_lat, pilot_long, uav_id, op_id, last_seen]
       properties:
         mac:
           type: string
@@ -673,6 +684,7 @@ components:
 
     SkyspyStatus:
       type: object
+      required: [active_drones, in_range]
       properties:
         active_drones:
           type: integer
