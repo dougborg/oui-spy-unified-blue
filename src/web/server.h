@@ -14,7 +14,7 @@ void serverInit();
 AsyncWebServer& getServer();
 
 // Register system-level routes (/, /api/status, /api/modules, etc.)
-void registerSystemRoutes(IDetectionModule** modules, int count);
+void registerSystemRoutes(IModule** modules, int count);
 
 // Start serving
 void serverBegin();

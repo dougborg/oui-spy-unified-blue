@@ -24,17 +24,19 @@ struct SSUavData {
     int flag;
 };
 
-class SkySpyModule : public IDetectionModule, public hal::BLEListener {
+class SkySpyModule : public IModule, public hal::BLEListener {
   public:
     const char* name() override {
         return "skyspy";
     }
     void setup() override;
     void loop() override;
-    void onBLEAdvertisement(NimBLEAdvertisedDevice* device) override;
     void registerRoutes(AsyncWebServer& server) override;
     bool isEnabled() override;
     void setEnabled(bool enabled) override;
+
+    // hal::BLEListener
+    void onBLEAdvertisement(NimBLEAdvertisedDevice* device) override;
 
     // Called from static WiFi callback
     void handleWiFiFrame(const uint8_t* payload, int length, int rssi);

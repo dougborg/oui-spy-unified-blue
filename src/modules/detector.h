@@ -25,17 +25,19 @@ struct DetDeviceAlias {
     String alias;
 };
 
-class DetectorModule : public IDetectionModule, public hal::BLEListener {
+class DetectorModule : public IModule, public hal::BLEListener {
   public:
     const char* name() override {
         return "detector";
     }
     void setup() override;
     void loop() override;
-    void onBLEAdvertisement(NimBLEAdvertisedDevice* device) override;
     void registerRoutes(AsyncWebServer& server) override;
     bool isEnabled() override;
     void setEnabled(bool enabled) override;
+
+    // hal::BLEListener
+    void onBLEAdvertisement(NimBLEAdvertisedDevice* device) override;
 
     // Accessors for route handlers
     const std::vector<DetTargetFilter>& filters() const {

@@ -7,7 +7,7 @@
 namespace web {
 
 static AsyncWebServer _server(80);
-static IDetectionModule** _modules = nullptr;
+static IModule** _modules = nullptr;
 static int _moduleCount = 0;
 
 void serverInit() {
@@ -18,7 +18,7 @@ AsyncWebServer& getServer() {
     return _server;
 }
 
-void registerSystemRoutes(IDetectionModule** modules, int count) {
+void registerSystemRoutes(IModule** modules, int count) {
     _modules = modules;
     _moduleCount = count;
 

@@ -6,9 +6,10 @@ void registerFoxhunterRoutes(AsyncWebServer& server, FoxhunterModule& mod) {
     // Get current target and RSSI
     server.on("/api/foxhunter/status", HTTP_GET, [&mod](AsyncWebServerRequest* r) {
         char buf[200];
-        snprintf(buf, sizeof(buf), "{\"target\":\"%s\",\"detected\":%s,\"rssi\":%d,\"lastSeen\":%lu}",
-                 mod.targetMAC().c_str(), mod.targetDetected() ? "true" : "false", mod.currentRSSI(),
-                 mod.lastTargetSeen());
+        snprintf(buf, sizeof(buf),
+                 "{\"target\":\"%s\",\"detected\":%s,\"rssi\":%d,\"lastSeen\":%lu}",
+                 mod.targetMAC().c_str(), mod.targetDetected() ? "true" : "false",
+                 mod.currentRSSI(), mod.lastTargetSeen());
         r->send(200, "application/json", buf);
     });
 

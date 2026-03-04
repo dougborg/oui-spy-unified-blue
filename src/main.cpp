@@ -42,7 +42,7 @@ static FoxhunterModule modFoxhunter;
 static FlockyouModule modFlockyou;
 static SkySpyModule modSkyspy;
 
-static IDetectionModule* modules[] = {
+static IModule* modules[] = {
     &modDetector,
     &modFoxhunter,
     &modFlockyou,

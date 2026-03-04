@@ -85,13 +85,11 @@ void registerFlockyouRoutes(AsyncWebServer& server, FlockyouModule& mod) {
         r->send(resp);
     });
 
-    server.on("/api/flockyou/history", HTTP_GET, [&mod](AsyncWebServerRequest* r) {
-        mod.serveHistory(r);
-    });
+    server.on("/api/flockyou/history", HTTP_GET,
+              [&mod](AsyncWebServerRequest* r) { mod.serveHistory(r); });
 
-    server.on("/api/flockyou/history/json", HTTP_GET, [&mod](AsyncWebServerRequest* r) {
-        mod.serveHistoryDownload(r);
-    });
+    server.on("/api/flockyou/history/json", HTTP_GET,
+              [&mod](AsyncWebServerRequest* r) { mod.serveHistoryDownload(r); });
 
     server.on("/api/flockyou/clear", HTTP_GET, [&mod](AsyncWebServerRequest* r) {
         mod.clearDetections();

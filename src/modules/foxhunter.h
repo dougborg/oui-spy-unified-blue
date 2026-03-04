@@ -3,17 +3,19 @@
 #include "../hal/ble_mgr.h"
 #include "module.h"
 
-class FoxhunterModule : public IDetectionModule, public hal::BLEListener {
+class FoxhunterModule : public IModule, public hal::BLEListener {
   public:
     const char* name() override {
         return "foxhunter";
     }
     void setup() override;
     void loop() override;
-    void onBLEAdvertisement(NimBLEAdvertisedDevice* device) override;
     void registerRoutes(AsyncWebServer& server) override;
     bool isEnabled() override;
     void setEnabled(bool enabled) override;
+
+    // hal::BLEListener
+    void onBLEAdvertisement(NimBLEAdvertisedDevice* device) override;
 
     // Public accessors for route handlers
     const String& targetMAC() const {

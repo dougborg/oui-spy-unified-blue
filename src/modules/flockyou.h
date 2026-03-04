@@ -23,17 +23,19 @@ struct FYDetection {
     bool hasGPS;
 };
 
-class FlockyouModule : public IDetectionModule, public hal::BLEListener {
+class FlockyouModule : public IModule, public hal::BLEListener {
   public:
     const char* name() override {
         return "flockyou";
     }
     void setup() override;
     void loop() override;
-    void onBLEAdvertisement(NimBLEAdvertisedDevice* device) override;
     void registerRoutes(AsyncWebServer& server) override;
     bool isEnabled() override;
     void setEnabled(bool enabled) override;
+
+    // hal::BLEListener
+    void onBLEAdvertisement(NimBLEAdvertisedDevice* device) override;
 
     // Accessors for route handlers (mutex must be held by caller)
     const FYDetection* detections() const {

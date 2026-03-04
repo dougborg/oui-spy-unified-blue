@@ -2,36 +2,24 @@
 
 #include <Arduino.h>
 #include <ESPAsyncWebServer.h>
-#include <NimBLEAdvertisedDevice.h>
-#include <esp_wifi.h>
 
 // ============================================================================
-// Detection Module Interface
-// All detection engines implement this to run simultaneously.
+// Module Interface — core lifecycle contract for all detection modules
 // ============================================================================
 
-class IDetectionModule {
+class IModule {
   public:
-    virtual ~IDetectionModule() = default;
+    virtual ~IModule() = default;
 
     virtual const char* name() = 0;
     virtual void setup() = 0;
     virtual void loop() = 0;
-
-    // BLE advertisement dispatch (called for every scan result)
-    virtual void onBLEAdvertisement(NimBLEAdvertisedDevice* device) = 0;
-
-    // WiFi promiscuous frame dispatch (Sky Spy only; default no-op)
-    virtual void onWiFiFrame(const uint8_t* payload, int len, int rssi) {
-        (void)payload;
-        (void)len;
-        (void)rssi;
-    }
-
-    // Register module-specific web routes under /api/{module}/
-    virtual void registerRoutes(AsyncWebServer& server) = 0;
-
-    // Enable/disable
     virtual bool isEnabled() = 0;
     virtual void setEnabled(bool enabled) = 0;
+
+    // Route registration (modules delegate to free functions in src/web/)
+    virtual void registerRoutes(AsyncWebServer& server) = 0;
 };
+
+// Back-compat alias during transition
+using IDetectionModule = IModule;
