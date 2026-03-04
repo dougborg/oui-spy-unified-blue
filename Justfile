@@ -9,8 +9,20 @@ web-install:
 web-dev:
     cd web && npm run dev
 
+web-lint:
+    cd web && npm run lint
+
+web-test:
+    cd web && npm test
+
+web-typecheck:
+    cd web && npm run typecheck
+
 web-build:
     cd web && npm run build
+
+generate-types:
+    cd web && npm run generate:types
 
 build-all:
     just web-build
@@ -68,8 +80,11 @@ analyze-cpp:
 quality:
     just lint
     just test
-    just test-cpp
+    just coverage-cpp
     just analyze-cpp
+    just web-lint
+    just web-test
+    just web-typecheck
 
 erase:
     python flash.py --erase

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "preact/hooks";
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { fetchJSON } from "../api/client";
 
 interface UsePollResult<T> {
@@ -10,7 +10,9 @@ interface UsePollResult<T> {
 export function usePoll<T>(url: string, intervalMs: number): UsePollResult<T> {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<Error | null>(null);
-  const timerRef = useRef<ReturnType<typeof setInterval>>(0 as unknown as ReturnType<typeof setInterval>);
+  const timerRef = useRef<ReturnType<typeof setInterval>>(
+    0 as unknown as ReturnType<typeof setInterval>,
+  );
 
   const doFetch = useCallback(() => {
     fetchJSON<T>(url)
@@ -39,7 +41,7 @@ export function usePoll<T>(url: string, intervalMs: number): UsePollResult<T> {
       clearInterval(timerRef.current);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [url, intervalMs, doFetch]);
+  }, [intervalMs, doFetch]);
 
   return { data, error, refresh: doFetch };
 }

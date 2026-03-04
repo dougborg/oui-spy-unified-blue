@@ -9,6 +9,7 @@ export function TabBar({ tabs, active, onSelect }: TabBarProps) {
     <nav class="flex flex-shrink-0 overflow-x-auto border-b border-border-dim">
       {tabs.map((label, i) => (
         <button
+          type="button"
           key={label}
           onClick={() => onSelect(i)}
           class={`min-w-0 flex-1 whitespace-nowrap px-1 py-2 text-center text-[11px] font-bold tracking-wider transition-colors ${

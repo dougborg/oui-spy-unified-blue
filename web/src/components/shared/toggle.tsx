@@ -7,8 +7,17 @@ interface ToggleProps {
 export function Toggle({ label, enabled, onToggle }: ToggleProps) {
   return (
     <div
+      role="switch"
+      tabIndex={0}
+      aria-checked={enabled}
       class="mb-1 flex cursor-pointer items-center justify-between rounded-md border border-border-dim px-2 py-1.5 transition-colors hover:border-accent/30"
       onClick={onToggle}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onToggle();
+        }
+      }}
     >
       <span class="text-xs text-accent">{label}</span>
       <div

@@ -23,14 +23,23 @@ bash .devcontainer/select-profile.sh linux-usb
 
 Then run **Dev Containers: Rebuild and Reopen in Container**.
 
+## Published image
+
+The devcontainer image is published to GitHub Container Registry on every push to `master` that changes devcontainer-related files. Local builds use `cacheFrom` to pull cached layers, making rebuilds fast.
+
+```text
+ghcr.io/dougborg/oui-spy-unified-blue/devcontainer:latest
+```
+
 ## What's pre-installed
 
 The Docker image includes:
 
 - PlatformIO CLI with all project platform/library packages
+- Node.js 22 + web dashboard npm dependencies
 - Python dev tools (`pre-commit`, `pytest`, `gcovr`)
-- Pre-commit hook environments (clang-format, markdownlint-cli2, pre-commit-hooks) — cached in the image so hooks run instantly without reinstalling
-- `cppcheck` for static analysis
+- Pre-commit hook environments (clang-format, markdownlint-cli2, Biome, pre-commit-hooks) — cached in the image so hooks run instantly without reinstalling
+- `clang-format`, `cppcheck` for C++ formatting and static analysis
 - `just` task runner
 
 ## In-container commands
@@ -51,6 +60,8 @@ just test                # Python tests
 just test-cpp            # native C++ tests (53 tests)
 just coverage-cpp        # tests + coverage report (35% threshold)
 just analyze-cpp         # cppcheck static analysis
+just web-lint            # Biome linter on web source
+just web-test            # Vitest web tests (18 tests)
 just quality             # all of the above
 ```
 

@@ -38,6 +38,17 @@ jobs:
           python -m pip install --upgrade pip
           pip install platformio
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build web dashboard
+        run: npm ci && npm run build
+        working-directory: web
+
       - name: Install project packages
         run: pio pkg install -d .
 

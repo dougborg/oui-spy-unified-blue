@@ -1,8 +1,8 @@
-import { usePoll } from "../../hooks/use-poll";
 import type { SkyspyDrone, SkyspyStatus } from "../../api/client";
-import { StatCard } from "../shared/stat-card";
+import { usePoll } from "../../hooks/use-poll";
 import { DeviceCard, Tag } from "../shared/device-card";
 import { EmptyState } from "../shared/empty-state";
+import { StatCard } from "../shared/stat-card";
 
 export function SkyspyPage() {
   const { data: drones } = usePoll<SkyspyDrone[]>("/api/skyspy/drones", 2000);

@@ -1,12 +1,12 @@
-import { useState, useEffect } from "preact/hooks";
-import { usePoll } from "../../hooks/use-poll";
+import { useEffect, useState } from "preact/hooks";
 import { postForm } from "../../api/client";
-import type { DetectorFilter, DetectorDevice } from "../../api/client";
-import { Card } from "../shared/card";
+import type { DetectorDevice, DetectorFilter } from "../../api/client";
+import { usePoll } from "../../hooks/use-poll";
 import { Button } from "../shared/button";
-import { TextArea } from "../shared/text-input";
+import { Card } from "../shared/card";
 import { DeviceCard, Tag } from "../shared/device-card";
 import { EmptyState } from "../shared/empty-state";
+import { TextArea } from "../shared/text-input";
 import { useToast } from "../shared/toast";
 
 interface DevicesResponse {
@@ -15,12 +15,8 @@ interface DevicesResponse {
 
 export function DetectorPage() {
   const { toast } = useToast();
-  const { data: filters } = usePoll<DetectorFilter[]>(
-    "/api/detector/filters",
-    10000,
-  );
-  const { data: devicesResp } =
-    usePoll<DevicesResponse>("/api/detector/devices", 3000);
+  const { data: filters } = usePoll<DetectorFilter[]>("/api/detector/filters", 10000);
+  const { data: devicesResp } = usePoll<DevicesResponse>("/api/detector/devices", 3000);
 
   const [ouis, setOuis] = useState("");
   const [macs, setMacs] = useState("");
@@ -30,10 +26,10 @@ export function DetectorPage() {
     if (filters && !filtersLoaded) {
       const ouiList: string[] = [];
       const macList: string[] = [];
-      filters.forEach((f) => {
+      for (const f of filters) {
         if (f.full) macList.push(f.id);
         else ouiList.push(f.id);
-      });
+      }
       setOuis(ouiList.join("\n"));
       setMacs(macList.join("\n"));
       setFiltersLoaded(true);
@@ -42,10 +38,7 @@ export function DetectorPage() {
 
   const saveFilters = async () => {
     try {
-      const result = await postForm<{ saved: number }>(
-        "/api/detector/filters",
-        { ouis, macs },
-      );
+      const result = await postForm<{ saved: number }>("/api/detector/filters", { ouis, macs });
       toast(`Saved ${result.saved} filters`, "success");
     } catch {
       toast("Error saving filters", "error");
@@ -77,11 +70,7 @@ export function DetectorPage() {
           <EmptyState message="No detections yet" />
         ) : (
           devices.map((d) => (
-            <DeviceCard
-              key={d.mac}
-              mac={d.mac}
-              subtitle={d.alias ? `(${d.alias})` : undefined}
-            >
+            <DeviceCard key={d.mac} mac={d.mac} subtitle={d.alias ? `(${d.alias})` : undefined}>
               <Tag>{d.rssi} dBm</Tag>
               <Tag>{d.filter}</Tag>
             </DeviceCard>

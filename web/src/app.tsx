@@ -1,13 +1,13 @@
 import { useState } from "preact/hooks";
-import { Header } from "./components/layout/header";
-import { TabBar } from "./components/layout/tab-bar";
-import { PageShell } from "./components/layout/page-shell";
-import { SystemPage } from "./components/system/system-page";
 import { DetectorPage } from "./components/detector/detector-page";
-import { FoxhunterPage } from "./components/foxhunter/foxhunter-page";
 import { FlockyouPage } from "./components/flockyou/flockyou-page";
-import { SkyspyPage } from "./components/skyspy/skyspy-page";
+import { FoxhunterPage } from "./components/foxhunter/foxhunter-page";
+import { Header } from "./components/layout/header";
+import { PageShell } from "./components/layout/page-shell";
+import { TabBar } from "./components/layout/tab-bar";
 import { ToastProvider } from "./components/shared/toast";
+import { SkyspyPage } from "./components/skyspy/skyspy-page";
+import { SystemPage } from "./components/system/system-page";
 
 const TABS = ["SYSTEM", "DETECT", "FOX", "FLOCK", "SKY"] as const;
 

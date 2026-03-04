@@ -34,6 +34,15 @@ static const size_t DASHBOARD_HTML_GZ_LEN = ${gz.length};
 
 writeFileSync(outPath, header);
 
+import { execFileSync } from "child_process";
+try {
+  execFileSync("clang-format", ["-i", outPath], { stdio: "inherit" });
+} catch {
+  console.log(
+    "[generate-header] clang-format not found — skipping (pre-commit will format)",
+  );
+}
+
 const htmlKB = (html.length / 1024).toFixed(1);
 const gzKB = (gz.length / 1024).toFixed(1);
 console.log(

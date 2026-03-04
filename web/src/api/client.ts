@@ -1,6 +1,6 @@
 // Typed API client generated from OpenAPI schema
 import createClient from "openapi-fetch";
-import type { paths, components } from "./schema";
+import type { components, paths } from "./schema";
 
 // Schema-derived type aliases for component use
 export type SystemStatus = components["schemas"]["SystemStatus"];
@@ -30,10 +30,7 @@ export async function fetchJSON<T>(url: string): Promise<T> {
   return res.json();
 }
 
-export async function postForm<T>(
-  url: string,
-  params: Record<string, string>,
-): Promise<T> {
+export async function postForm<T>(url: string, params: Record<string, string>): Promise<T> {
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },

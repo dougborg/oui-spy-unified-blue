@@ -1,20 +1,17 @@
-import { useState, useEffect } from "preact/hooks";
-import { usePoll } from "../../hooks/use-poll";
-import { postForm, postEmpty } from "../../api/client";
+import { useEffect, useState } from "preact/hooks";
+import { postEmpty, postForm } from "../../api/client";
 import type { FoxhunterStatus } from "../../api/client";
-import { StatCard } from "../shared/stat-card";
-import { Card } from "../shared/card";
+import { usePoll } from "../../hooks/use-poll";
 import { Button } from "../shared/button";
-import { TextInput } from "../shared/text-input";
+import { Card } from "../shared/card";
 import { ProgressBar } from "../shared/progress-bar";
+import { StatCard } from "../shared/stat-card";
+import { TextInput } from "../shared/text-input";
 import { useToast } from "../shared/toast";
 
 export function FoxhunterPage() {
   const { toast } = useToast();
-  const { data, refresh } = usePoll<FoxhunterStatus>(
-    "/api/foxhunter/status",
-    500,
-  );
+  const { data, refresh } = usePoll<FoxhunterStatus>("/api/foxhunter/status", 500);
 
   const [mac, setMac] = useState("");
   const [macLoaded, setMacLoaded] = useState(false);
@@ -54,10 +51,7 @@ export function FoxhunterPage() {
   return (
     <div>
       <div class="mb-1.5 flex gap-1.5">
-        <StatCard
-          value={data?.detected ? data.rssi : "-"}
-          label="RSSI dBm"
-        />
+        <StatCard value={data?.detected ? data.rssi : "-"} label="RSSI dBm" />
         <StatCard
           value={data?.detected ? "TRACKING" : "SEARCHING"}
           label="STATUS"
@@ -66,12 +60,7 @@ export function FoxhunterPage() {
       </div>
 
       <Card title="TARGET MAC">
-        <TextInput
-          value={mac}
-          onInput={setMac}
-          placeholder="AA:BB:CC:DD:EE:FF"
-          maxLength={17}
-        />
+        <TextInput value={mac} onInput={setMac} placeholder="AA:BB:CC:DD:EE:FF" maxLength={17} />
         <div class="flex gap-1.5">
           <Button small onClick={setTarget}>
             SET TARGET

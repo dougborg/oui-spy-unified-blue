@@ -2,7 +2,8 @@
   "name": "oui-spy-unified-blue (USB Linux)",
   "build": {
     "dockerfile": "Dockerfile",
-    "context": ".."
+    "context": "..",
+    "cacheFrom": "ghcr.io/dougborg/oui-spy-unified-blue/devcontainer:latest"
   },
   "remoteUser": "vscode",
   "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
@@ -11,7 +12,8 @@
     "PATH": "/home/vscode/.local/bin:${containerEnv:PATH}"
   },
   "mounts": [
-    "source=pio-home,target=/home/vscode/.platformio,type=volume"
+    "source=pio-home,target=/home/vscode/.platformio,type=volume",
+    "source=npm-cache,target=/home/vscode/.npm,type=volume"
   ],
   "customizations": {
     "vscode": {
@@ -19,15 +21,21 @@
         "platformio.platformio-ide",
         "ms-vscode.cpptools",
         "ms-vscode.cpptools-extension-pack",
-        "ms-vscode.vscode-serial-monitor"
+        "ms-vscode.vscode-serial-monitor",
+        "biomejs.biome",
+        "vitest.explorer"
       ],
       "settings": {
         "C_Cpp.default.configurationProvider": "platformio.platformio-ide",
+        "files.associations": {
+          "*.tcc": "cpp"
+        },
         "terminal.integrated.defaultProfile.linux": "bash"
       }
     }
   },
-  "postCreateCommand": "git config --global --add safe.directory ${containerWorkspaceFolder} && pio --version && pio pkg install -d .",
+  "postCreateCommand": "git config --global --add safe.directory ${containerWorkspaceFolder} && pio --version && pio pkg install -d . && cd web && npm ci && npm run generate:types",
+  "postAttachCommand": "echo 'Devcontainer ready. Build with: pio run (see .devcontainer/README.md for USB upload options).'",
   "runArgs": [
     "--init",
     "--privileged",

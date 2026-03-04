@@ -269,12 +269,14 @@ just test-cpp           # run native C++ tests
 just coverage-cpp       # run tests + generate coverage report
 just analyze-cpp        # run cppcheck static analysis
 just lint               # run pre-commit (formatting, linting)
+just web-lint           # run Biome linter on web source
+just web-test           # run Vitest web tests
 just quality            # run all quality checks
 ```
 
 ### Dev Container (VS Code)
 
-This repo includes a ready-to-use devcontainer in `.devcontainer/` with PlatformIO, pre-commit hook environments, and all dev tooling preinstalled.
+This repo includes a ready-to-use devcontainer in `.devcontainer/` with PlatformIO, Node.js, pre-commit hook environments, and all dev tooling preinstalled.
 
 1. Open the project in VS Code
 2. Run **Dev Containers: Reopen in Container**
@@ -294,10 +296,11 @@ The devcontainer supports multiple profiles. See `.devcontainer/README.md` for L
 |-------|-------------|-------|----------|
 | `test_native_smoke` | `native` | 45 tests | Logic modules at 75-100% |
 | `test_native_parser_edge` | `native_parser` | 8 tests | ODID parser edge cases |
+| `web/src/**/*.test.{ts,tsx}` | `jsdom` (Vitest) | 18 tests | API client, polling hook, UI components |
 
-Tests run natively (no ESP32 needed) using Unity test framework. They exercise pure logic functions extracted from each module.
+C++ tests run natively (no ESP32 needed) using Unity test framework. They exercise pure logic functions extracted from each module. Web tests run via Vitest with jsdom, using Testing Library for component tests.
 
-**What's tested:**
+**What's tested (firmware):**
 
 - Detector: MAC validation, normalization, filter matching, cooldown state machine
 - Foxhunter: proximity tick evaluation, target match events (first acquisition, reacquired, update, lost)
@@ -308,14 +311,23 @@ Tests run natively (no ESP32 needed) using Unity test framework. They exercise p
 - ODID codec: encode/decode roundtrips, pack/unpack, NAN frame building
 - WiFi: frame building, processing, truncation/corruption rejection
 
+**What's tested (web dashboard):**
+
+- API client: fetchJSON, postForm, postEmpty — success responses and error handling
+- usePoll hook: mount fetch, interval polling, visibility pause/resume, cleanup
+- Toggle component: rendering, state display, click handling
+- StatCard component: value/label rendering, custom styling
+
 ### CI Pipeline
 
 The GitHub Actions CI runs on every push to `master` and on PRs:
 
 - **quality:** pre-commit (formatting, linting) + pytest
 - **native-tests:** PlatformIO native tests + gcovr coverage report (35% line threshold)
+- **web-build:** Biome lint + Vitest tests + Vite production build + 100KB bundle size gate
 - **build-firmware:** PlatformIO firmware build with `-Werror` + 2MB binary size gate
 - **static-analysis:** cppcheck on all maintained sources
+- **devcontainer:** Docker image build, smoke test, and publish to GHCR (on devcontainer file changes)
 
 ### Code Quality
 
@@ -323,6 +335,8 @@ The GitHub Actions CI runs on every push to `master` and on PRs:
 - Firmware binary size gate: CI fails if `.bin` exceeds 2MB
 - `clang-format` v18.1.8 enforced via pre-commit
 - `cppcheck` static analysis on all maintained source directories
+- [Biome](https://biomejs.dev/) linter + formatter for web source (recommended rules, import organizer)
+- [Vitest](https://vitest.dev/) + Testing Library for web component and hook tests
 - ArduinoJson for all JSON API responses (proper escaping, no injection risk)
 - Input validation on all POST endpoints (MAC format, string lengths, WPA2 password requirements)
 - Bounds checking on WiFi promiscuous callbacks (beacon IE parsing, NAN frame handling)
@@ -335,13 +349,15 @@ The GitHub Actions CI runs on every push to `master` and on PRs:
 |--------|---------|
 | `platformio.ini` | Firmware platform and libraries (`NimBLE-Arduino`, `ESP Async WebServer`, `ArduinoJson`, `Adafruit NeoPixel`, `TinyGPSPlus`) |
 | `requirements-dev.txt` | Python dev tools (`pre-commit`, `pytest`, `gcovr`) |
-| `.devcontainer/Dockerfile` | Container toolchain (Python, PlatformIO CLI, `just`, `cppcheck`, pre-commit hook environments) |
+| `web/package.json` | Web dashboard dependencies (Preact, Tailwind, Vitest, Biome, openapi-typescript) |
+| `.devcontainer/Dockerfile` | Container toolchain (Python, Node.js, PlatformIO CLI, `just`, `clang-format`, `cppcheck`, pre-commit hook environments) |
 | `.devcontainer/devcontainer.json` | VS Code extension dependencies |
 
 Automation:
 
-- **Dependabot** for Dockerfile base image and GitHub Actions updates
+- **Dependabot** for Dockerfile base image, GitHub Actions, pip, and npm updates
 - **PlatformIO Dependency Smoke** workflow (weekly) — installs packages and runs `pio run`
+- **Devcontainer** workflow — builds, smoke-tests, and publishes the devcontainer image to GHCR
 - **CI** workflow — PR/push validation
 - **Release Firmware** workflow — tag-based GitHub Releases with firmware binaries and checksums
 - **CodeQL** workflow — C/C++ security scanning
