@@ -158,9 +158,8 @@ void WardriverModule::loop() {
                 // Write CSV row (use GPS coords if fresh, otherwise 0,0)
                 {
                     std::string row = wardriver_logic::formatWigleRow(
-                        bssid.c_str(), ssid.c_str(),
-                        wardriver_logic::authModeToString(authMode), "WIFI", channel, rssi,
-                        gpsFresh ? gps.lat : 0.0, gpsFresh ? gps.lon : 0.0,
+                        bssid.c_str(), ssid.c_str(), wardriver_logic::authModeToString(authMode),
+                        "WIFI", channel, rssi, gpsFresh ? gps.lat : 0.0, gpsFresh ? gps.lon : 0.0,
                         gpsFresh ? gps.accuracy : 0.0f, timeStr.c_str());
                     appendCsvRow(String(row.c_str()));
                 }
@@ -187,7 +186,7 @@ void WardriverModule::loop() {
     }
 }
 
-void WardriverModule::onBLEAdvertisement(NimBLEAdvertisedDevice* device) {
+void WardriverModule::onBLEAdvertisement(const NimBLEAdvertisedDevice* device) {
     if (!_enabled || !_sessionActive)
         return;
 
@@ -212,9 +211,8 @@ void WardriverModule::onBLEAdvertisement(NimBLEAdvertisedDevice* device) {
         const hal::GPSData& gps = hal::gpsGet();
         String timeStr = hal::gpsGetTime();
         std::string row = wardriver_logic::formatWigleRow(
-            mac.c_str(), deviceName.c_str(), "[BLE]", "BLE", 0, rssi,
-            gpsFresh ? gps.lat : 0.0, gpsFresh ? gps.lon : 0.0,
-            gpsFresh ? gps.accuracy : 0.0f, timeStr.c_str());
+            mac.c_str(), deviceName.c_str(), "[BLE]", "BLE", 0, rssi, gpsFresh ? gps.lat : 0.0,
+            gpsFresh ? gps.lon : 0.0, gpsFresh ? gps.accuracy : 0.0f, timeStr.c_str());
         appendCsvRow(String(row.c_str()));
     }
 
@@ -458,8 +456,8 @@ void WardriverModule::checkWatchlist(const String& mac, int rssi, const String& 
     _wlDevices.push_back(newDev);
 
     hal::notify(hal::NOTIFY_WD_NEW_DEVICE);
-    Serial.printf("[WARDRIVER] Watchlist match: %s (%s) type=%s\n", mac.c_str(), matchedDesc.c_str(),
-                  type.c_str());
+    Serial.printf("[WARDRIVER] Watchlist match: %s (%s) type=%s\n", mac.c_str(),
+                  matchedDesc.c_str(), type.c_str());
 }
 
 // ============================================================================

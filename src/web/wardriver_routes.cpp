@@ -171,19 +171,21 @@ static esp_err_t handleWdClearFilters(httpd_req_t* req) {
 void registerWardriverRoutes(httpd_handle_t https, httpd_handle_t http, WardriverModule& mod) {
     _wdMod = &mod;
 
-    static const httpd_uri_t statusUri = {"/api/wardriver/status", HTTP_GET, handleWdStatus, nullptr};
+    static const httpd_uri_t statusUri = {"/api/wardriver/status", HTTP_GET, handleWdStatus,
+                                          nullptr};
     static const httpd_uri_t startUri = {"/api/wardriver/start", HTTP_POST, handleWdStart, nullptr};
     static const httpd_uri_t stopUri = {"/api/wardriver/stop", HTTP_POST, handleWdStop, nullptr};
     static const httpd_uri_t clearUri = {"/api/wardriver/clear", HTTP_POST, handleWdClear, nullptr};
-    static const httpd_uri_t recentUri = {"/api/wardriver/recent", HTTP_GET, handleWdRecent, nullptr};
+    static const httpd_uri_t recentUri = {"/api/wardriver/recent", HTTP_GET, handleWdRecent,
+                                          nullptr};
     static const httpd_uri_t downloadUri = {"/api/wardriver/download", HTTP_GET, handleWdDownload,
                                             nullptr};
     static const httpd_uri_t configGetUri = {"/api/wardriver/config", HTTP_GET, handleWdConfigGet,
                                              nullptr};
-    static const httpd_uri_t configPostUri = {"/api/wardriver/config", HTTP_POST, handleWdConfigPost,
-                                              nullptr};
-    static const httpd_uri_t filtersGetUri = {"/api/wardriver/filters", HTTP_GET, handleWdFiltersGet,
-                                              nullptr};
+    static const httpd_uri_t configPostUri = {"/api/wardriver/config", HTTP_POST,
+                                              handleWdConfigPost, nullptr};
+    static const httpd_uri_t filtersGetUri = {"/api/wardriver/filters", HTTP_GET,
+                                              handleWdFiltersGet, nullptr};
     static const httpd_uri_t filtersPostUri = {"/api/wardriver/filters", HTTP_POST,
                                                handleWdFiltersPost, nullptr};
     static const httpd_uri_t devicesUri = {"/api/wardriver/devices", HTTP_GET, handleWdDevices,

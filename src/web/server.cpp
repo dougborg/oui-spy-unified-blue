@@ -52,16 +52,14 @@ static esp_err_t handleCaptiveDetect(httpd_req_t* req) {
 // CA certificate download (DER — for iOS profile install)
 static esp_err_t handleCACertDER(httpd_req_t* req) {
     httpd_resp_set_type(req, "application/x-x509-ca-cert");
-    httpd_resp_set_hdr(req, "Content-Disposition",
-                       "attachment; filename=\"ouispy-ca.cer\"");
+    httpd_resp_set_hdr(req, "Content-Disposition", "attachment; filename=\"ouispy-ca.cer\"");
     return httpd_resp_send(req, (const char*)CA_CERT_DER, CA_CERT_DER_LEN);
 }
 
 // CA certificate download (PEM)
 static esp_err_t handleCACertPEM(httpd_req_t* req) {
     httpd_resp_set_type(req, "application/x-pem-file");
-    httpd_resp_set_hdr(req, "Content-Disposition",
-                       "attachment; filename=\"ouispy-ca.pem\"");
+    httpd_resp_set_hdr(req, "Content-Disposition", "attachment; filename=\"ouispy-ca.pem\"");
     return httpd_resp_send(req, (const char*)CA_CERT_PEM, CA_CERT_PEM_LEN);
 }
 
@@ -215,16 +213,13 @@ static esp_err_t handleReset(httpd_req_t* req) {
 void serverInit() {
     // --- HTTPS Server on :443 ---
     httpd_ssl_config_t httpsConfig = HTTPD_SSL_CONFIG_DEFAULT();
-    // Note: in this ESP-IDF version (pre-5.x), cacert_pem serves as the server
-    // certificate (not for client verification). Newer ESP-IDF has a separate
-    // servercert field and repurposes cacert_pem for mutual TLS.
-    httpsConfig.cacert_pem = DEV_CERT_PEM;
-    httpsConfig.cacert_len = DEV_CERT_PEM_LEN;
+    httpsConfig.servercert = DEV_CERT_PEM;
+    httpsConfig.servercert_len = DEV_CERT_PEM_LEN;
     httpsConfig.prvtkey_pem = DEV_KEY_PEM;
     httpsConfig.prvtkey_len = DEV_KEY_PEM_LEN;
     httpsConfig.httpd.max_uri_handlers = 55;
-    httpsConfig.httpd.max_open_sockets = 4;  // Concurrent TLS sessions for connection reuse
-    httpsConfig.httpd.stack_size = 10240;    // TLS handshake needs more stack than plain HTTP
+    httpsConfig.httpd.max_open_sockets = 4; // Concurrent TLS sessions for connection reuse
+    httpsConfig.httpd.stack_size = 10240;   // TLS handshake needs more stack than plain HTTP
     httpsConfig.httpd.lru_purge_enable = true;
 
     esp_err_t ret = httpd_ssl_start(&_httpsServer, &httpsConfig);
@@ -265,7 +260,8 @@ void serverInit() {
         static const httpd_uri_t gen204 = {"/generate_204", HTTP_GET, handleCaptiveDetect, nullptr};
         static const httpd_uri_t hotspot = {"/hotspot-detect.html", HTTP_GET, handleCaptiveDetect,
                                             nullptr};
-        static const httpd_uri_t ncsi = {"/connecttest.txt", HTTP_GET, handleCaptiveDetect, nullptr};
+        static const httpd_uri_t ncsi = {"/connecttest.txt", HTTP_GET, handleCaptiveDetect,
+                                         nullptr};
         static const httpd_uri_t success = {"/success.txt", HTTP_GET, handleCaptiveDetect, nullptr};
         httpd_register_uri_handler(_httpServer, &gen204);
         httpd_register_uri_handler(_httpServer, &hotspot);

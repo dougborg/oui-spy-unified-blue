@@ -2,6 +2,7 @@ FROM mcr.microsoft.com/devcontainers/base:ubuntu
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+ARG NODE_MAJOR=22
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         python3 \
@@ -17,12 +18,14 @@ RUN apt-get update \
         clang-format \
         cppcheck \
         just \
-    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && curl -fsSL https://deb.nodesource.com/setup_${NODE_MAJOR}.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 USER vscode
+
+COPY --from=ghcr.io/astral-sh/uv:0.9.29 /uv /uvx /home/vscode/.local/bin/
 
 RUN python3 -m venv /home/vscode/.venv/pio \
     && /home/vscode/.venv/pio/bin/pip install --upgrade pip \

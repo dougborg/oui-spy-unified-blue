@@ -9,10 +9,10 @@
 
 namespace web {
 
-void serverInit();                                      // Start HTTPS:443 + HTTP:80
-httpd_handle_t getHTTPSServer();                        // For module route registration
-httpd_handle_t getHTTPServer();                         // For module route registration
+void serverInit();               // Start HTTPS:443 + HTTP:80
+httpd_handle_t getHTTPSServer(); // For module route registration
+httpd_handle_t getHTTPServer();  // For module route registration
 void registerSystemRoutes(IModule** modules, int count);
-void serverBegin();                                     // No-op (servers started in init)
+void serverBegin(); // No-op (servers started in init)
 
 } // namespace web

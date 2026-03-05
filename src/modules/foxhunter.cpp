@@ -61,7 +61,7 @@ void FoxhunterModule::loop() {
     }
 }
 
-void FoxhunterModule::onBLEAdvertisement(NimBLEAdvertisedDevice* device) {
+void FoxhunterModule::onBLEAdvertisement(const NimBLEAdvertisedDevice* device) {
     if (!_enabled || _targetMAC.length() == 0)
         return;
 

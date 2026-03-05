@@ -73,7 +73,7 @@ void dnsServerLoop() {
             return;
         qOffset += labelLen + 1;
     }
-    qOffset++; // skip null terminator
+    qOffset++;              // skip null terminator
     int qEnd = qOffset + 4; // QTYPE(2) + QCLASS(2)
     if (qEnd > len)
         return;

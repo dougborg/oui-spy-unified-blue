@@ -36,7 +36,7 @@ class FlockyouModule : public IModule, public hal::BLEListener {
     void setEnabled(bool enabled) override;
 
     // hal::BLEListener
-    void onBLEAdvertisement(NimBLEAdvertisedDevice* device) override;
+    void onBLEAdvertisement(const NimBLEAdvertisedDevice* device) override;
 
     // Accessors for route handlers (mutex must be held by caller)
     const FYDetection* detections() const {

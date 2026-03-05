@@ -5,6 +5,7 @@
 #include "opendroneid.h"
 #include <cstdint>
 #include <esp_http_server.h>
+#include <esp_wifi_types.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 
@@ -41,7 +42,7 @@ class SkySpyModule : public IModule, public hal::BLEListener {
     void setEnabled(bool enabled) override;
 
     // hal::BLEListener
-    void onBLEAdvertisement(NimBLEAdvertisedDevice* device) override;
+    void onBLEAdvertisement(const NimBLEAdvertisedDevice* device) override;
 
     // Process queued WiFi frames (called from loop)
     void processWiFiQueue();
@@ -73,7 +74,7 @@ class SkySpyModule : public IModule, public hal::BLEListener {
     unsigned long _lastHeartbeat = 0;
     unsigned long _lastStatus = 0;
 
-    SSUavData* nextUav(uint8_t* mac);
+    SSUavData* nextUav(const uint8_t* mac);
     void sendJSON(const SSUavData* uav);
     void extractFromODID(SSUavData* uav);
     void triggerDetection();

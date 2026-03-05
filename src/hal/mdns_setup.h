@@ -8,6 +8,6 @@
 
 namespace hal {
 
-void mdnsInit();  // Start mDNS with hostname "ouispy" + HTTP/HTTPS service records
+void mdnsInit(); // Start mDNS with hostname "ouispy" + HTTP/HTTPS service records
 
 } // namespace hal

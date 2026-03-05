@@ -181,7 +181,7 @@ void DetectorModule::loop() {
     }
 }
 
-void DetectorModule::onBLEAdvertisement(NimBLEAdvertisedDevice* device) {
+void DetectorModule::onBLEAdvertisement(const NimBLEAdvertisedDevice* device) {
     if (!_enabled)
         return;
     if (_filters.empty())
