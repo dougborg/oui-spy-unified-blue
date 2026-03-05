@@ -10,7 +10,7 @@
 
 namespace hal {
 
-void dnsServerStart();   // Start listening on UDP port 53
-void dnsServerLoop();    // Non-blocking poll for incoming queries
+void dnsServerStart(); // Start listening on UDP port 53
+void dnsServerLoop();  // Non-blocking poll for incoming queries
 
 } // namespace hal

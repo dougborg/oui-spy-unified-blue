@@ -1,6 +1,6 @@
 #include "wifi_mgr.h"
 #include <dhcpserver/dhcpserver.h>
-#include <dhcpserver/dhcpserver_options.h>
+#include <esp_netif.h>
 
 namespace hal {
 
@@ -16,7 +16,7 @@ void wifiInit(const String& ssid, const String& password) {
 
     // Explicit IP/subnet config
     WiFi.softAPConfig(IPAddress(192, 168, 4, 1), IPAddress(192, 168, 4, 1),
-                       IPAddress(255, 255, 255, 0));
+                      IPAddress(255, 255, 255, 0));
 
     // Start AP on channel 1
     bool ok;
@@ -33,8 +33,16 @@ void wifiInit(const String& ssid, const String& password) {
     // Configure DHCP server to advertise our AP IP as DNS server
     // This enables the captive portal DNS to intercept all queries
     IPAddress apIP = WiFi.softAPIP();
-    dhcps_offer_t offer = OFFER_DNS;
-    dhcps_set_option_info(6, &offer, sizeof(offer));
+    esp_netif_t* netif = esp_netif_get_handle_from_ifkey("WIFI_AP_DEF");
+    if (netif) {
+        dhcps_offer_t offer = OFFER_DNS;
+        esp_err_t err = esp_netif_dhcps_option(netif, ESP_NETIF_OP_SET,
+                                               ESP_NETIF_DOMAIN_NAME_SERVER, &offer, sizeof(offer));
+        if (err != ESP_OK)
+            Serial.printf("[HAL] DHCP DNS option failed: 0x%x\n", err);
+    } else {
+        Serial.println("[HAL] WARN: AP netif not found, captive portal DNS may not work");
+    }
 
     Serial.printf("[HAL] AP IP: %s\n", apIP.toString().c_str());
     _apRunning = ok;

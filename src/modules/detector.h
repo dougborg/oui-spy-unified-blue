@@ -38,7 +38,7 @@ class DetectorModule : public IModule, public hal::BLEListener {
     void setEnabled(bool enabled) override;
 
     // hal::BLEListener
-    void onBLEAdvertisement(NimBLEAdvertisedDevice* device) override;
+    void onBLEAdvertisement(const NimBLEAdvertisedDevice* device) override;
 
     // Accessors for route handlers
     const std::vector<DetTargetFilter>& filters() const {

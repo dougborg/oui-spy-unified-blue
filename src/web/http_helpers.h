@@ -115,8 +115,8 @@ inline esp_err_t sendError(httpd_req_t* req, int status, const char* msg) {
     return sendJSON(req, status, json.c_str());
 }
 
-inline esp_err_t sendFile(httpd_req_t* req, fs::FS& fs, const char* path,
-                          const char* contentType, const char* disposition) {
+inline esp_err_t sendFile(httpd_req_t* req, fs::FS& fs, const char* path, const char* contentType,
+                          const char* disposition) {
     File f = fs.open(path, "r");
     if (!f) {
         return sendError(req, 404, "file not found");
@@ -140,8 +140,7 @@ inline esp_err_t sendFile(httpd_req_t* req, fs::FS& fs, const char* path,
 }
 
 // Helper to register a URI handler on both HTTPS and HTTP servers
-inline void registerOnBoth(httpd_handle_t https, httpd_handle_t http,
-                           const httpd_uri_t* uri) {
+inline void registerOnBoth(httpd_handle_t https, httpd_handle_t http, const httpd_uri_t* uri) {
     if (https)
         httpd_register_uri_handler(https, uri);
     if (http)

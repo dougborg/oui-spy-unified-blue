@@ -52,11 +52,7 @@ static SkySpyModule modSkyspy;
 static WardriverModule modWardriver;
 
 static IModule* modules[] = {
-    &modDetector,
-    &modFoxhunter,
-    &modFlockyou,
-    &modSkyspy,
-    &modWardriver,
+    &modDetector, &modFoxhunter, &modFlockyou, &modSkyspy, &modWardriver,
 };
 static const int MODULE_COUNT = sizeof(modules) / sizeof(modules[0]);
 
@@ -271,8 +267,8 @@ static void loopNormalMode() {
     // Heartbeat (5s interval)
     static unsigned long lastHB = 0;
     if (millis() - lastHB > 5000) {
-        Serial.printf("[HEARTBEAT] uptime=%lums heap=%u clients=%d\n",
-                      millis(), ESP.getFreeHeap(), WiFi.softAPgetStationNum());
+        Serial.printf("[HEARTBEAT] uptime=%lums heap=%u clients=%d\n", millis(), ESP.getFreeHeap(),
+                      WiFi.softAPgetStationNum());
         Serial.flush();
         lastHB = millis();
     }

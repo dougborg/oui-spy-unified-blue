@@ -67,9 +67,9 @@ std::string sanitizeSSID(const char* ssid) {
     return out;
 }
 
-std::string formatWigleRow(const char* mac, const char* ssid, const char* authMode, const char* type,
-                           int channel, int rssi, double lat, double lon, float accuracy,
-                           const char* timestamp) {
+std::string formatWigleRow(const char* mac, const char* ssid, const char* authMode,
+                           const char* type, int channel, int rssi, double lat, double lon,
+                           float accuracy, const char* timestamp) {
     // WiGLE CSV format:
     // MAC,SSID,AuthMode,FirstSeen,Channel,RSSI,CurrentLatitude,CurrentLongitude,AltitudeMeters,AccuracyMeters,Type
     std::string row;

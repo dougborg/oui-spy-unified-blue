@@ -78,8 +78,8 @@ String gpsGetTime() {
     if (_parser.date.isValid() && _parser.time.isValid() && _parser.date.year() >= 2020) {
         char buf[24];
         snprintf(buf, sizeof(buf), "%04d-%02d-%02d %02d:%02d:%02d", _parser.date.year(),
-                 _parser.date.month(), _parser.date.day(), _parser.time.hour(), _parser.time.minute(),
-                 _parser.time.second());
+                 _parser.date.month(), _parser.date.day(), _parser.time.hour(),
+                 _parser.time.minute(), _parser.time.second());
         return String(buf);
     }
 

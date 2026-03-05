@@ -63,7 +63,7 @@ static bool fyCheckMfr(uint16_t id) {
                                                sizeof(fyMfrIDs) / sizeof(fyMfrIDs[0]));
 }
 
-static bool fyCheckRaven(NimBLEAdvertisedDevice* dev) {
+static bool fyCheckRaven(const NimBLEAdvertisedDevice* dev) {
     if (!dev || !dev->haveServiceUUID())
         return false;
     int count = dev->getServiceUUIDCount();
@@ -76,7 +76,7 @@ static bool fyCheckRaven(NimBLEAdvertisedDevice* dev) {
     return false;
 }
 
-static const char* fyEstimateRavenFW(NimBLEAdvertisedDevice* dev) {
+static const char* fyEstimateRavenFW(const NimBLEAdvertisedDevice* dev) {
     if (!dev || !dev->haveServiceUUID())
         return "?";
     bool hasNewGPS = false, hasOldLoc = false, hasPower = false;
@@ -305,18 +305,13 @@ void FlockyouModule::loop() {
     }
 }
 
-void FlockyouModule::onBLEAdvertisement(NimBLEAdvertisedDevice* dev) {
+void FlockyouModule::onBLEAdvertisement(const NimBLEAdvertisedDevice* dev) {
     if (!_enabled)
         return;
 
     NimBLEAddress addr = dev->getAddress();
+    const uint8_t* mac = addr.getVal();
     std::string addrStr = addr.toString();
-
-    unsigned int m[6];
-    sscanf(addrStr.c_str(), "%02x:%02x:%02x:%02x:%02x:%02x", &m[0], &m[1], &m[2], &m[3], &m[4],
-           &m[5]);
-    uint8_t mac[6] = {(uint8_t)m[0], (uint8_t)m[1], (uint8_t)m[2],
-                      (uint8_t)m[3], (uint8_t)m[4], (uint8_t)m[5]};
 
     int rssi = dev->getRSSI();
     std::string devName = dev->haveName() ? dev->getName() : "";

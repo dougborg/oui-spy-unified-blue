@@ -11,6 +11,8 @@ const outPath = resolve(__dirname, "../../src/web/dashboard_gz.h");
 
 const html = readFileSync(distPath);
 const gz = gzipSync(html, { level: 9 });
+// Zero the OS byte (offset 9) for deterministic output across platforms
+gz[9] = 0x00;
 
 const lines = [];
 const perLine = 16;
@@ -33,15 +35,6 @@ static const size_t DASHBOARD_HTML_GZ_LEN = ${gz.length};
 `;
 
 writeFileSync(outPath, header);
-
-import { execFileSync } from "child_process";
-try {
-  execFileSync("clang-format", ["-i", outPath], { stdio: "inherit" });
-} catch {
-  console.log(
-    "[generate-header] clang-format not found — skipping (pre-commit will format)",
-  );
-}
 
 const htmlKB = (html.length / 1024).toFixed(1);
 const gzKB = (gz.length / 1024).toFixed(1);

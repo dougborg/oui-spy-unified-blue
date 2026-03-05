@@ -64,7 +64,8 @@ void registerFoxhunterRoutes(httpd_handle_t https, httpd_handle_t http, Foxhunte
     static const httpd_uri_t targetUri = {"/api/foxhunter/target", HTTP_POST, handleFoxSetTarget,
                                           nullptr};
     static const httpd_uri_t rssiUri = {"/api/foxhunter/rssi", HTTP_GET, handleFoxRSSI, nullptr};
-    static const httpd_uri_t clearUri = {"/api/foxhunter/clear", HTTP_POST, handleFoxClear, nullptr};
+    static const httpd_uri_t clearUri = {"/api/foxhunter/clear", HTTP_POST, handleFoxClear,
+                                         nullptr};
 
     web::registerOnBoth(https, http, &statusUri);
     web::registerOnBoth(https, http, &targetUri);

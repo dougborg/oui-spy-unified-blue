@@ -114,7 +114,8 @@ void registerDetectorRoutes(httpd_handle_t https, httpd_handle_t http, DetectorM
                                             handleDetSaveFilters, nullptr};
     static const httpd_uri_t devicesGet = {"/api/detector/devices", HTTP_GET, handleDetDevices,
                                            nullptr};
-    static const httpd_uri_t aliasPost = {"/api/detector/alias", HTTP_POST, handleDetAlias, nullptr};
+    static const httpd_uri_t aliasPost = {"/api/detector/alias", HTTP_POST, handleDetAlias,
+                                          nullptr};
     static const httpd_uri_t clearDevices = {"/api/detector/clear-devices", HTTP_POST,
                                              handleDetClearDevices, nullptr};
     static const httpd_uri_t clearFilters = {"/api/detector/clear-filters", HTTP_POST,

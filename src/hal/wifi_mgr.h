@@ -30,9 +30,9 @@ void wifiEnablePromiscuous(WiFiFrameCallback cb, uint8_t channel = 6);
 void wifiDisablePromiscuous();
 
 // WiFi network scan (for wardriving)
-bool wifiStartNetworkScan();  // Start async scan, returns false if already scanning
-int wifiGetScanComplete();    // -1=in progress, -2=not started, >=0=count
-void wifiScanCleanup();       // Delete scan results
+bool wifiStartNetworkScan(); // Start async scan, returns false if already scanning
+int wifiGetScanComplete();   // -1=in progress, -2=not started, >=0=count
+void wifiScanCleanup();      // Delete scan results
 
 // Get AP IP
 IPAddress wifiGetAPIP();

@@ -8,22 +8,26 @@ repos:
       - id: check-yaml
       - id: check-added-large-files
 
-  - repo: https://github.com/DavidAnson/markdownlint-cli2
-    rev: v0.18.1
-    hooks:
-      - id: markdownlint-cli2
-
-  - repo: https://github.com/pre-commit/mirrors-clang-format
-    rev: v18.1.8
-    hooks:
-      - id: clang-format
-        files: ^src/(app|hal|modules|protocols|storage|web)/.*\.(c|cc|cpp|h|hh|hpp)$
-
   - repo: local
     hooks:
+      - id: markdownlint-cli2
+        name: markdownlint-cli2
+        entry: npx --prefix web markdownlint-cli2
+        language: system
+        types: [markdown]
+        exclude: ^(\.pio/|web/node_modules/)
+
+      - id: clang-format
+        name: clang-format
+        entry: clang-format -i
+        language: system
+        files: ^src/(app|hal|modules|protocols|storage|web)/.*\.(c|cc|cpp|h|hh|hpp)$
+        exclude: ^src/web/dashboard_gz\.h$
+
       - id: biome-check
         name: biome check (web)
-        entry: npx --prefix web biome check --config-path web/biome.json --no-errors-on-unmatched
+        entry: bash -c 'cd web && npx biome check --no-errors-on-unmatched src/'
         language: system
         files: ^web/src/
+        pass_filenames: false
         types_or: [javascript, jsx, ts, tsx, json]

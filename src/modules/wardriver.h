@@ -50,7 +50,7 @@ class WardriverModule : public IModule, public hal::BLEListener {
     void setEnabled(bool enabled) override;
 
     // hal::BLEListener
-    void onBLEAdvertisement(NimBLEAdvertisedDevice* device) override;
+    void onBLEAdvertisement(const NimBLEAdvertisedDevice* device) override;
 
     // Accessors for route handlers
     bool sessionActive() const {
@@ -134,7 +134,8 @@ class WardriverModule : public IModule, public hal::BLEListener {
     bool _scanPending = false;
 
     // Internal helpers
-    void addRecent(const String& mac, const String& ssid, const String& type, int rssi, int channel);
+    void addRecent(const String& mac, const String& ssid, const String& type, int rssi,
+                   int channel);
     void appendCsvRow(const String& row);
     void writeCsvHeader();
     bool matchesFilter(const String& deviceMAC, String& matchedDesc);
