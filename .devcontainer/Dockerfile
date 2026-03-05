@@ -27,17 +27,19 @@ USER vscode
 
 COPY --from=ghcr.io/astral-sh/uv:0.9.29 /uv /uvx /home/vscode/.local/bin/
 
-RUN python3 -m venv /home/vscode/.venv/pio \
-    && /home/vscode/.venv/pio/bin/pip install --upgrade pip \
-    && /home/vscode/.venv/pio/bin/pip install platformio esptool pyserial
+ENV PATH="/home/vscode/.local/bin:${PATH}"
 
-ENV PATH="/home/vscode/.venv/pio/bin:/home/vscode/.local/bin:${PATH}"
-
-COPY --chown=vscode:vscode requirements-dev.txt /tmp/pio-project/requirements-dev.txt
+# Install dev dependencies into a persistent venv via uv
+COPY --chown=vscode:vscode pyproject.toml /tmp/pio-project/pyproject.toml
+COPY --chown=vscode:vscode uv.lock /tmp/pio-project/uv.lock
 COPY --chown=vscode:vscode platformio.ini /tmp/pio-project/platformio.ini
 COPY --chown=vscode:vscode .pre-commit-config.yaml /tmp/pio-project/.pre-commit-config.yaml
 
-RUN /home/vscode/.venv/pio/bin/pip install -r /tmp/pio-project/requirements-dev.txt
+ENV UV_PROJECT_ENVIRONMENT="/home/vscode/.venv"
+
+RUN cd /tmp/pio-project && uv sync
+
+ENV PATH="/home/vscode/.venv/bin:${PATH}"
 
 RUN cd /tmp/pio-project && git init && pre-commit install-hooks && rm -rf .git
 
