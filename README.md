@@ -223,9 +223,9 @@ src/
 
 ```bash
 pip install esptool pyserial
-python flash.py                        # auto-detect bin from firmware/ folder
-python flash.py my_firmware.bin        # flash a specific file
-python flash.py --erase                # full erase before flashing
+python scripts/flash.py                        # auto-detect bin from firmware/ folder
+python scripts/flash.py my_firmware.bin        # flash a specific file
+python scripts/flash.py --erase                # full erase before flashing
 ```
 
 ### Building from Source
@@ -284,7 +284,7 @@ This repo includes a ready-to-use devcontainer in `.devcontainer/` with Platform
 
 The devcontainer supports multiple profiles. See `.devcontainer/README.md` for Linux USB passthrough and host-specific setup.
 
-> **macOS note:** USB passthrough from containers can be limited. Build in-container (`pio run`) and flash from host (`python flash.py`).
+> **macOS note:** USB passthrough from containers can be limited. Build in-container (`pio run`) and flash from host (`python scripts/flash.py`).
 
 ---
 
@@ -348,7 +348,7 @@ The GitHub Actions CI runs on every push to `master` and on PRs:
 | Source | Manages |
 |--------|---------|
 | `platformio.ini` | Firmware platform and libraries (`NimBLE-Arduino`, `ESP Async WebServer`, `ArduinoJson`, `Adafruit NeoPixel`, `TinyGPSPlus`) |
-| `requirements-dev.txt` | Python dev tools (`pre-commit`, `pytest`, `gcovr`) |
+| `pyproject.toml` / `uv.lock` | Python dev tools via [uv](https://docs.astral.sh/uv/) (`pre-commit`, `pytest`, `gcovr`, `platformio`) |
 | `web/package.json` | Web dashboard dependencies (Preact, Tailwind, Vitest, Biome, openapi-typescript) |
 | `.devcontainer/Dockerfile` | Container toolchain (Python, Node.js, PlatformIO CLI, `just`, `clang-format`, `cppcheck`, pre-commit hook environments) |
 | `.devcontainer/devcontainer.json` | VS Code extension dependencies |

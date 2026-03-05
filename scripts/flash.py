@@ -5,14 +5,14 @@ OUI Spy Unified Blue -- Firmware Flasher
 Drop your .bin in the firmware/ folder (or pass a path), plug in your
 XIAO ESP32-S3, and run:
 
-    python flash.py
+    python scripts/flash.py
 
 Supports batch flashing -- after each board finishes, swap it out and
 press Enter to flash the next one. Great for production runs.
 
 Works on macOS, Linux, and Windows.
 
-Requirements:  pip install esptool pyserial
+Requirements:  uv sync  (or: pip install esptool pyserial)
 """
 
 import glob
@@ -37,7 +37,7 @@ if sys.platform == "win32":
 APP_OFFSET    = "0x10000"
 BAUD          = "921600"
 CHIP          = "esp32s3"
-FIRMWARE_DIR  = os.path.join(os.path.dirname(os.path.abspath(__file__)), "firmware")
+FIRMWARE_DIR  = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "firmware")
 
 # Known USB VID:PID pairs for ESP32-S3 / common UART bridges
 ESP_VIDS = {
@@ -292,7 +292,7 @@ def main():
             continue
         if a in ("-h", "--help"):
             print("""
-  Usage:  python flash.py [firmware.bin] [--erase] [--batch]
+  Usage:  python scripts/flash.py [firmware.bin] [--erase] [--batch]
 
   Options:
     firmware.bin   Path to .bin file (auto-detects from firmware/ folder)
@@ -300,17 +300,17 @@ def main():
     --batch        Batch mode: flash multiple boards one after another
 
   Single board:
-    python flash.py
+    python scripts/flash.py
 
   Batch flash (production run):
-    python flash.py --batch
-    python flash.py --batch --erase
+    python scripts/flash.py --batch
+    python scripts/flash.py --batch --erase
 
   Setup:
-    pip install esptool pyserial
+    uv sync
     mkdir firmware
     # drop your .bin in firmware/
-    python flash.py
+    python scripts/flash.py
 """)
             sys.exit(0)
         bin_path = a
@@ -329,7 +329,7 @@ def main():
     if not firmware:
         print(f"\n  No .bin file found.")
         print(f"  Drop your firmware in:  {FIRMWARE_DIR}/")
-        print(f"  Or pass it directly:    python flash.py my_firmware.bin\n")
+        print(f"  Or pass it directly:    python scripts/flash.py my_firmware.bin\n")
         sys.exit(1)
 
     # Batch mode

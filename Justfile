@@ -32,7 +32,7 @@ setup:
     pio pkg install -d .
 
 setup-dev:
-    python3 -m pip install -r requirements-dev.txt
+    uv sync
 
 build:
     pio run
@@ -87,10 +87,10 @@ quality:
     just web-typecheck
 
 erase:
-    python flash.py --erase
+    python scripts/flash.py --erase
 
 flash bin="":
-    if [[ -n "{{bin}}" ]]; then python flash.py "{{bin}}"; else python flash.py; fi
+    if [[ -n "{{bin}}" ]]; then python scripts/flash.py "{{bin}}"; else python scripts/flash.py; fi
 
 devcontainer-auto:
     bash .devcontainer/select-profile.sh auto

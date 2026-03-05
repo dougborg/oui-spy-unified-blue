@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [master]
+    branches: [master, main]
   pull_request:
   workflow_dispatch:
 
@@ -20,12 +20,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: "pip"
-          cache-dependency-path: requirements-dev.txt
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -34,10 +30,8 @@ jobs:
           cache: "npm"
           cache-dependency-path: web/package-lock.json
 
-      - name: Install quality tooling
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
+      - name: Install dev dependencies
+        run: uv sync
 
       - name: Install web dependencies
         run: npm ci
@@ -48,10 +42,10 @@ jobs:
         working-directory: web
 
       - name: Run pre-commit
-        run: pre-commit run --all-files
+        run: uv run pre-commit run --all-files
 
       - name: Run pytest
-        run: python -m pytest -q
+        run: uv run pytest -q
 
   native-tests:
     runs-on: ubuntu-latest
@@ -59,12 +53,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: "pip"
-          cache-dependency-path: requirements-dev.txt
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
 
       - name: Cache PlatformIO
         uses: actions/cache@v4
@@ -77,20 +67,17 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-platformio-
 
-      - name: Install PlatformIO
-        run: |
-          python -m pip install --upgrade pip
-          pip install platformio
-          pip install -r requirements-dev.txt
+      - name: Install dev dependencies
+        run: uv sync
 
       - name: Run native C++ tests
         run: |
-          pio test -e native
-          pio test -e native_parser
+          uv run pio test -e native
+          uv run pio test -e native_parser
 
       - name: Generate native coverage report
         run: |
-          python -m gcovr --root . --txt --print-summary \
+          uv run gcovr --root . --txt --print-summary \
             --fail-under-line 35 \
             --filter src/protocols/opendroneid.c \
             --filter src/protocols/wifi.c \
@@ -165,12 +152,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: "pip"
-          cache-dependency-path: requirements-dev.txt
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
 
       - name: Cache PlatformIO
         uses: actions/cache@v4
@@ -183,16 +166,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-platformio-
 
-      - name: Install PlatformIO
-        run: |
-          python -m pip install --upgrade pip
-          pip install platformio
+      - name: Install dev dependencies
+        run: uv sync
 
       - name: Install project packages
-        run: pio pkg install -d .
+        run: uv run pio pkg install -d .
 
       - name: Build firmware
-        run: pio run
+        run: uv run pio run
 
       - name: Check firmware size
         run: |

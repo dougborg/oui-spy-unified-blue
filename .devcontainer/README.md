@@ -90,7 +90,7 @@ Use the default `devcontainer.json` for build/dev. USB passthrough can be limite
 Recommended path:
 
 - Build in container: `pio run`
-- Flash from host: `python flash.py` or host `pio run -t upload`
+- Flash from host: `python scripts/flash.py` or host `pio run -t upload`
 
 ### Windows (Docker Desktop + WSL2)
 
@@ -99,7 +99,7 @@ Use the default `devcontainer.json` for build/dev.
 For serial flashing, USB forwarding to WSL can vary by setup (`usbipd-win` + WSL attach). If serial isn't visible in-container, use host upload instead:
 
 - Build in container: `pio run`
-- Flash from host: `python flash.py` or host `pio run -t upload`
+- Flash from host: `python scripts/flash.py` or host `pio run -t upload`
 
 ## Quick reset to portable default
 
