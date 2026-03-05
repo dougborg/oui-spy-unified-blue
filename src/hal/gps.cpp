@@ -8,17 +8,25 @@ namespace hal {
 #define GPS_HDOP_SCALE 5.0f
 
 static TinyGPSPlus _parser;
-static HardwareSerial _serial(1);
 static GPSData _data = {};
+
+#if HAS_GPS_UART
+static HardwareSerial _serial(1);
 static unsigned long _lastChar = 0;
+#endif
 
 void gpsInit() {
+#if HAS_GPS_UART
     _serial.begin(GPS_BAUD, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
+    Serial.println("[HAL] GPS initialized (UART on configured pins)");
+#else
+    Serial.println("[HAL] GPS: no hardware UART (phone GPS only)");
+#endif
     memset(&_data, 0, sizeof(_data));
-    Serial.println("[HAL] GPS initialized (L76K on D6/D7)");
 }
 
 void gpsUpdate() {
+#if HAS_GPS_UART
     // Read UART bytes into TinyGPSPlus parser
     while (_serial.available()) {
         char c = _serial.read();
@@ -63,6 +71,7 @@ void gpsUpdate() {
     } else if (_data.hwFix && _parser.location.isValid()) {
         _data.lastUpdate = millis();
     }
+#endif // HAS_GPS_UART
 }
 
 const GPSData& gpsGet() {
@@ -74,7 +83,6 @@ bool gpsIsFresh() {
 }
 
 String gpsGetTime() {
-    // Use GPS time if date and time are valid
     if (_parser.date.isValid() && _parser.time.isValid() && _parser.date.year() >= 2020) {
         char buf[24];
         snprintf(buf, sizeof(buf), "%04d-%02d-%02d %02d:%02d:%02d", _parser.date.year(),
@@ -83,7 +91,6 @@ String gpsGetTime() {
         return String(buf);
     }
 
-    // Fallback: boot-relative timestamp
     unsigned long s = millis() / 1000;
     char buf[24];
     snprintf(buf, sizeof(buf), "0000-00-00 %02lu:%02lu:%02lu", s / 3600, (s % 3600) / 60, s % 60);
@@ -91,7 +98,6 @@ String gpsGetTime() {
 }
 
 void gpsSetFromPhone(double lat, double lon, float accuracy) {
-    // Ignore phone GPS when hardware has a fix
     if (_data.hwFix)
         return;
     _data.lat = lat;

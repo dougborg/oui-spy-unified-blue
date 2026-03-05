@@ -24,7 +24,7 @@
 #include "hal/mdns_setup.h"
 #include "hal/neopixel.h"
 #include "hal/notify.h"
-#include "hal/pins.h"
+#include "hal/board.h"
 #include "hal/wifi_mgr.h"
 
 // Modules
@@ -289,6 +289,12 @@ static void loopNormalMode() {
 // ============================================================================
 
 void setup() {
+#ifdef POWER_HOLD_PIN
+    // M5StickC Plus 2: must hold power pin HIGH immediately or device shuts off
+    pinMode(POWER_HOLD_PIN, OUTPUT);
+    digitalWrite(POWER_HOLD_PIN, HIGH);
+#endif
+
     Serial.begin(115200);
     delay(200);
 

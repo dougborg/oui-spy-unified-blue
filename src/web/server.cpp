@@ -1,4 +1,5 @@
 #include "server.h"
+#include "../hal/board.h"
 #include "../hal/buzzer.h"
 #include "../hal/gps.h"
 #include "../storage/nvs_store.h"
@@ -200,6 +201,22 @@ static esp_err_t handleAPPost(httpd_req_t* req) {
     return ESP_OK;
 }
 
+// Board info
+static esp_err_t handleBoard(httpd_req_t* req) {
+    JsonDocument doc;
+    doc["board"] = BOARD_NAME;
+    doc["has_buzzer"] = (bool)HAS_BUZZER;
+    doc["has_gps"] = (bool)HAS_GPS_UART;
+    doc["has_display"] = (bool)HAS_DISPLAY;
+    doc["has_neopixel"] = (bool)HAS_NEOPIXEL;
+    doc["has_apa102"] = (bool)HAS_APA102;
+    doc["has_led"] = (bool)HAS_LED;
+    doc["has_psram"] = (bool)HAS_PSRAM;
+    String json;
+    serializeJson(doc, json);
+    return sendJSON(req, 200, json.c_str());
+}
+
 // Device reset
 static esp_err_t handleReset(httpd_req_t* req) {
     sendJSON(req, 200, "{\"ok\":true}");
@@ -293,6 +310,7 @@ void registerSystemRoutes(IModule** modules, int count) {
     static const httpd_uri_t apGetUri = {"/api/ap", HTTP_GET, handleAPGet, nullptr};
     static const httpd_uri_t apPostUri = {"/api/ap", HTTP_POST, handleAPPost, nullptr};
     static const httpd_uri_t resetUri = {"/api/reset", HTTP_POST, handleReset, nullptr};
+    static const httpd_uri_t boardUri = {"/api/board", HTTP_GET, handleBoard, nullptr};
 
     regBoth(&statusUri);
     regBoth(&modulesUri);
@@ -303,6 +321,7 @@ void registerSystemRoutes(IModule** modules, int count) {
     regBoth(&apGetUri);
     regBoth(&apPostUri);
     regBoth(&resetUri);
+    regBoth(&boardUri);
 }
 
 void serverBegin() {

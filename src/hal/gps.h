@@ -1,6 +1,6 @@
 #pragma once
 
-#include "pins.h"
+#include "board.h"
 #include <Arduino.h>
 #include <TinyGPS++.h>
 
