@@ -245,7 +245,7 @@ void SkySpyModule::onBLEAdvertisement(const NimBLEAdvertisedDevice* device) {
     // Check for ODID BLE service data (UUID 0xFFFA)
     static const NimBLEUUID ODID_SVC_UUID(static_cast<uint16_t>(0xFFFA));
     std::string svcData = device->getServiceData(ODID_SVC_UUID);
-    if (svcData.empty())
+    if (svcData.size() < 25) // ODID single messages are 25 bytes
         return;
 
     const uint8_t* mac = device->getAddress().getVal();
