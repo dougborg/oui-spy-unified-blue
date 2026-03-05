@@ -159,6 +159,7 @@ Current budget: 30.2% RAM, 20.4% Flash — plenty of headroom for the expected i
 **Proceed with the upgrade**, using the pioarduino community fork.
 
 Rationale:
+
 1. ESP-IDF 4.4 is end-of-life — no new security patches or bug fixes
 2. NimBLE-Arduino 1.x is effectively abandoned; 2.x is the active line
 3. The `cacert_pem` workaround is a maintenance trap waiting to confuse future contributors
@@ -171,39 +172,41 @@ Rationale:
 ### Phase 1: Platform & Build (branch: `upgrade/esp-idf-5x`)
 
 1. Update `platformio.ini`:
+
    ```ini
    platform = https://github.com/pioarduino/platform-espressif32/releases/download/55.03.37/platform-espressif32.zip
    lib_deps = h2zero/NimBLE-Arduino@^2.3.0  ; was ^1.4.0
    ```
+
 2. Remove `-mfix-esp32-psram-cache-issue` from build flags
 3. Run `pio run` — catalog all compilation errors
 
 ### Phase 2: NimBLE 2.x Migration
 
-4. Update `src/hal/ble_mgr.h`: change `BLEListener::onBLEAdvertisement` to const pointer
-5. Update `src/hal/ble_mgr.cpp`: rename callback class, fix `setPower()`, fix `start()` duration, fix `setScanCallbacks()`
-6. Update all 5 modules' `onBLEAdvertisement()` signatures
+1. Update `src/hal/ble_mgr.h`: change `BLEListener::onBLEAdvertisement` to const pointer
+2. Update `src/hal/ble_mgr.cpp`: rename callback class, fix `setPower()`, fix `start()` duration, fix `setScanCallbacks()`
+3. Update all 5 modules' `onBLEAdvertisement()` signatures
 
 ### Phase 3: ESP-IDF 5.x API Changes
 
-7. Update `src/hal/wifi_mgr.cpp`: replace `dhcps_*` with `esp_netif_dhcps_option()`
-8. Update `src/web/server.cpp`: rename `cacert_pem` → `servercert`, remove workaround comment
+1. Update `src/hal/wifi_mgr.cpp`: replace `dhcps_*` with `esp_netif_dhcps_option()`
+2. Update `src/web/server.cpp`: rename `cacert_pem` → `servercert`, remove workaround comment
 
 ### Phase 4: Build Clean & Verify
 
-9. Fix any new `-Werror` warnings from ESP-IDF 5.x headers
-10. Run `pio run` — confirm clean build
-11. Run `pio test -e native` — confirm all 57 logic tests pass
-12. Run web build chain — confirm all 18 web tests pass
+1. Fix any new `-Werror` warnings from ESP-IDF 5.x headers
+2. Run `pio run` — confirm clean build
+3. Run `pio test -e native` — confirm all 57 logic tests pass
+4. Run web build chain — confirm all 18 web tests pass
 
 ### Phase 5: Device Testing
 
-13. Flash to device, verify WiFi AP connectivity
-14. Verify BLE scanning (70% duty cycle coexistence)
-15. Verify HTTPS dashboard loads with valid cert
-16. Verify all 5 modules function (enable/disable, routes, data)
-17. Compare heap/flash usage against pre-upgrade baseline
-18. Test scan mode (WiFi promiscuous + aggressive BLE)
+1. Flash to device, verify WiFi AP connectivity
+2. Verify BLE scanning (70% duty cycle coexistence)
+3. Verify HTTPS dashboard loads with valid cert
+4. Verify all 5 modules function (enable/disable, routes, data)
+5. Compare heap/flash usage against pre-upgrade baseline
+6. Test scan mode (WiFi promiscuous + aggressive BLE)
 
 ## References
 

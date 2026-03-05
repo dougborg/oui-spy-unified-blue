@@ -18,6 +18,7 @@ repos:
     hooks:
       - id: clang-format
         files: ^src/(app|hal|modules|protocols|storage|web)/.*\.(c|cc|cpp|h|hh|hpp)$
+        exclude: ^src/web/dashboard_gz\.h$
 
   - repo: local
     hooks:

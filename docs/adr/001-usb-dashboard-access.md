@@ -26,19 +26,19 @@ Platform: Seeed XIAO ESP32-S3, `espressif32@^6.3.0`, Arduino framework.
 
 PPPoS (PPP over Serial) creates a real IP network interface over the USB-CDC serial port. The host runs `pppd` and gets a routed IP connection to the ESP32. The existing AsyncWebServer serves transparently on the new interface via lwIP.
 
-### Memory Impact
+### A: Memory Impact
 
 - PPP stack overhead: ~20-40 KB heap
 - Remaining free heap: ~104-124 KB (from 144 KB baseline)
 - Flash: ~15-20 KB additional firmware
 
-### Advantages
+### A: Advantages
 
 - Transparent to existing web server (lwIP auto-routes to all interfaces)
 - Mature, well-understood protocol
 - Moderate memory overhead
 
-### Blockers
+### A: Blockers
 
 1. **Arduino framework does not expose PPP APIs.** ESP-IDF's lwIP supports PPPoS natively, but the Arduino-ESP32 wrapper does not surface these APIs. Enabling PPP requires either migrating to native ESP-IDF or building a custom Arduino-ESP32 fork. Both are major architectural changes. (Ref: [espressif/arduino-esp32#7203](https://github.com/espressif/arduino-esp32/issues/7203))
 
@@ -56,7 +56,7 @@ PPPoS (PPP over Serial) creates a real IP network interface over the USB-CDC ser
 
 The ESP32-S3 presents itself as a USB Ethernet adapter via TinyUSB. The host OS detects a new network interface automatically. The web server is accessible on both WiFi and USB interfaces.
 
-### Memory Impact
+### B: Memory Impact
 
 - TinyUSB core + CDC-ECM class: ~10-30 KB heap
 - Network buffers (no DMA, CPU polling): ~20-40 KB heap
@@ -64,12 +64,12 @@ The ESP32-S3 presents itself as a USB Ethernet adapter via TinyUSB. The host OS 
 - **Total: ~50-100 KB overhead**
 - Remaining free heap: ~44-94 KB (dangerously low for active web connections)
 
-### Advantages
+### B: Advantages
 
 - Most seamless UX — plug USB in, browse to an IP
 - No host-side software beyond a web browser
 
-### Blockers
+### B: Blockers
 
 1. **macOS does not support CDC-ECM natively.** macOS requires CDC-NCM (Network Control Model). CDC-ECM devices are not recognized without third-party drivers. Since the primary development environment is macOS, this is a showstopper for the default configuration. (Ref: Apple `com.apple.driver.usb.cdc.ncm` only handles NCM class)
 
@@ -91,7 +91,7 @@ A lightweight approach that avoids new network stacks entirely. A Python script 
 
 ### Architecture
 
-```
+```text
 Browser ──HTTP──▶ Python proxy (localhost:8080) ──serial frames──▶ ESP32 handler
                                                                      │
                                                               Existing route
@@ -100,7 +100,7 @@ Browser ──HTTP──▶ Python proxy (localhost:8080) ──serial frames─
 Browser ◀──HTTP── Python proxy ◀──serial frames────────────────── Response
 ```
 
-### Memory Impact
+### C: Memory Impact
 
 - Firmware: ~2-3 KB flash for framing protocol + request dispatcher
 - Heap: negligible (reuses existing route handler functions, no new buffers)
@@ -127,7 +127,7 @@ Browser ◀──HTTP── Python proxy ◀──serial frames─────�
 
 Serial at 115200 baud = ~14 KB/s throughput. The dashboard SPA is ~150 KB gzipped — too slow to serve over serial. The proxy script serves static assets from the local `web/dist/` directory and only forwards API calls (`/api/*`) over serial. API payloads are small JSON (typically < 1 KB), well within serial bandwidth.
 
-### Advantages
+### C: Advantages
 
 - Zero impact on existing memory budget
 - Works on all platforms (Python 3 + pyserial)
