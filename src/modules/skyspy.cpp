@@ -242,13 +242,10 @@ void SkySpyModule::onBLEAdvertisement(const NimBLEAdvertisedDevice* device) {
     if (!_enabled)
         return;
 
-    const std::vector<uint8_t>& payload = device->getPayload();
-    int len = (int)payload.size();
-    if (len < 6)
-        return;
-
-    // Check for ODID BLE service UUID signature
-    if (!(payload[1] == 0x16 && payload[2] == 0xFA && payload[3] == 0xFF && payload[4] == 0x0D))
+    // Check for ODID BLE service data (UUID 0xFFFA)
+    static const NimBLEUUID ODID_SVC_UUID(static_cast<uint16_t>(0xFFFA));
+    std::string svcData = device->getServiceData(ODID_SVC_UUID);
+    if (svcData.empty())
         return;
 
     const uint8_t* mac = device->getAddress().getVal();
@@ -260,7 +257,8 @@ void SkySpyModule::onBLEAdvertisement(const NimBLEAdvertisedDevice* device) {
     uav->rssi = device->getRSSI();
     memcpy(uav->mac, mac, 6);
 
-    const uint8_t* odid = payload.data() + 6;
+    // Service data starts after the UUID, so first byte is the ODID message type
+    const uint8_t* odid = reinterpret_cast<const uint8_t*>(svcData.data());
     switch (odid[0] & 0xF0) {
     case 0x00: {
         ODID_BasicID_data basic;

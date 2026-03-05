@@ -309,14 +309,8 @@ void FlockyouModule::onBLEAdvertisement(const NimBLEAdvertisedDevice* dev) {
     if (!_enabled)
         return;
 
-    NimBLEAddress addr = dev->getAddress();
-    std::string addrStr = addr.toString();
-
-    unsigned int m[6];
-    sscanf(addrStr.c_str(), "%02x:%02x:%02x:%02x:%02x:%02x", &m[0], &m[1], &m[2], &m[3], &m[4],
-           &m[5]);
-    uint8_t mac[6] = {(uint8_t)m[0], (uint8_t)m[1], (uint8_t)m[2],
-                      (uint8_t)m[3], (uint8_t)m[4], (uint8_t)m[5]};
+    const uint8_t* mac = dev->getAddress().getVal();
+    std::string addrStr = dev->getAddress().toString();
 
     int rssi = dev->getRSSI();
     std::string devName = dev->haveName() ? dev->getName() : "";

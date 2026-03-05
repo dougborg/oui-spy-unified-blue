@@ -30,14 +30,13 @@ void bleInit() {
     NimBLEDevice::init("");
     NimBLEDevice::setPower(9); // Max TX power
     _scan = NimBLEDevice::getScan();
-    _scan->setScanCallbacks(&_callbacks, false);
+    _scan->setScanCallbacks(&_callbacks, true); // wantDuplicates=true — see every advertisement
     _scan->setActiveScan(false); // Passive — saves radio time for WiFi coexistence
-    _scan->setDuplicateFilter(false); // See every advertisement
 
     // Default scan params — ~70% BLE duty cycle
-    // Units are 0.625ms: interval=160 → 100ms, window=112 → 70ms
-    _scan->setInterval(160);
-    _scan->setWindow(112);
+    // NimBLE 2.x takes milliseconds directly
+    _scan->setInterval(100);
+    _scan->setWindow(70);
 
     _initialized = true;
     Serial.println("[HAL] BLE manager initialized");
@@ -63,14 +62,14 @@ void bleRequestAggressiveScan(bool aggressive) {
         if (_aggressive) {
             // Scan-only mode (no WiFi AP) — max duty cycle is safe
             _scan->setActiveScan(true);
-            _scan->setInterval(80);
-            _scan->setWindow(72);
+            _scan->setInterval(50);
+            _scan->setWindow(45);
             Serial.println("[HAL] BLE scan: aggressive (50ms/45ms, active)");
         } else {
             // Normal mode (WiFi AP active) — ~70% duty cycle
             _scan->setActiveScan(false);
-            _scan->setInterval(160);
-            _scan->setWindow(112);
+            _scan->setInterval(100);
+            _scan->setWindow(70);
             Serial.println("[HAL] BLE scan: normal (100ms/70ms, passive)");
         }
     }
