@@ -65,6 +65,29 @@ just web-test            # Vitest web tests (18 tests)
 just quality             # all of the above
 ```
 
+## Docker targets (no local env needed)
+
+Every build/test/lint target has a `docker-` counterpart that runs inside the
+published devcontainer image. Only Docker is required on the host.
+
+```bash
+just docker-setup        # first-time: install pio packages + web deps
+just docker-build        # build firmware
+just docker-build-all    # build web + firmware
+just docker-test         # Python tests
+just docker-test-cpp     # native C++ tests
+just docker-coverage-cpp # tests + coverage report
+just docker-lint         # pre-commit (formatting, linting)
+just docker-analyze-cpp  # cppcheck static analysis
+just docker-web-lint     # Biome linter
+just docker-web-test     # Vitest web tests
+just docker-web-typecheck # TypeScript type checks
+just docker-web-build    # build web dashboard
+just docker-quality      # all quality checks
+```
+
+Flash/upload/monitor are not available via Docker (they need host USB access).
+
 ## Recommended workflow by host OS
 
 ### Linux
@@ -89,8 +112,8 @@ Use the default `devcontainer.json` for build/dev. USB passthrough can be limite
 
 Recommended path:
 
-- Build in container: `pio run`
-- Flash from host: `python scripts/flash.py` or host `pio run -t upload`
+- Build in container: `pio run` or from host: `just docker-build`
+- Flash from host: `just flash` or `pio run -t upload`
 
 ### Windows (Docker Desktop + WSL2)
 
@@ -98,8 +121,8 @@ Use the default `devcontainer.json` for build/dev.
 
 For serial flashing, USB forwarding to WSL can vary by setup (`usbipd-win` + WSL attach). If serial isn't visible in-container, use host upload instead:
 
-- Build in container: `pio run`
-- Flash from host: `python scripts/flash.py` or host `pio run -t upload`
+- Build in container: `pio run` or from host: `just docker-build`
+- Flash from host: `just flash` or `pio run -t upload`
 
 ## Quick reset to portable default
 

@@ -274,6 +274,20 @@ just web-test           # run Vitest web tests
 just quality            # run all quality checks
 ```
 
+### Docker targets (no local env needed)
+
+Every build/test/lint target has a `docker-` counterpart that runs inside the published devcontainer image. Only Docker is required on the host:
+
+```bash
+just docker-build        # build firmware
+just docker-test         # Python tests
+just docker-test-cpp     # native C++ tests
+just docker-lint         # pre-commit (formatting, linting)
+just docker-quality      # all quality checks
+```
+
+Run `just docker-setup` once after cloning to install PlatformIO packages and web dependencies inside the image volume. See `.devcontainer/README.md` for the full list of docker targets.
+
 ### Dev Container (VS Code)
 
 This repo includes a ready-to-use devcontainer in `.devcontainer/` with PlatformIO, Node.js, pre-commit hook environments, and all dev tooling preinstalled.
@@ -284,7 +298,7 @@ This repo includes a ready-to-use devcontainer in `.devcontainer/` with Platform
 
 The devcontainer supports multiple profiles. See `.devcontainer/README.md` for Linux USB passthrough and host-specific setup.
 
-> **macOS note:** USB passthrough from containers can be limited. Build in-container (`pio run`) and flash from host (`python scripts/flash.py`).
+> **macOS note:** USB passthrough from containers can be limited. Build in-container (`pio run`) and flash from host (`just flash`).
 
 ---
 
