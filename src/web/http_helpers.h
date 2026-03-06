@@ -100,10 +100,22 @@ inline bool getQueryParam(httpd_req_t* req, const char* key, String& out) {
 // ----------------------------------------------------------------------------
 
 inline esp_err_t sendJSON(httpd_req_t* req, int status, const char* json) {
-    httpd_resp_set_status(req, status == 200   ? "200 OK"
-                               : status == 400 ? "400 Bad Request"
-                               : status == 404 ? "404 Not Found"
-                                               : "500 Internal Server Error");
+    char statusBuf[32];
+    const char* reason;
+    switch (status) {
+    case 200: reason = "OK"; break;
+    case 400: reason = "Bad Request"; break;
+    case 404: reason = "Not Found"; break;
+    case 500: reason = "Internal Server Error"; break;
+    default:
+        snprintf(statusBuf, sizeof(statusBuf), "%d", status);
+        reason = nullptr;
+        break;
+    }
+    if (reason) {
+        snprintf(statusBuf, sizeof(statusBuf), "%d %s", status, reason);
+    }
+    httpd_resp_set_status(req, statusBuf);
     httpd_resp_set_type(req, "application/json");
     return httpd_resp_sendstr(req, json);
 }

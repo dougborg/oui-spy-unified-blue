@@ -165,13 +165,20 @@ void DetectorModule::loop() {
     if (!_enabled)
         return;
 
-    // Output JSON for new matches
+    // Output JSON for new matches — copy under lock then print outside
     if (_newMatch) {
-        String alias = getAlias(_matchMAC);
+        char mac[18], type[8];
+        int rssi;
+        portENTER_CRITICAL(&_matchMux);
+        strlcpy(mac, _matchMAC, sizeof(mac));
+        rssi = _matchRSSI;
+        strlcpy(type, _matchType, sizeof(type));
+        _newMatch = false;
+        portEXIT_CRITICAL(&_matchMux);
+        String alias = getAlias(mac);
         Serial.printf("{\"module\":\"detector\",\"mac\":\"%s\",\"alias\":\"%s\",\"rssi\":%d,"
                       "\"type\":\"%s\"}\n",
-                      _matchMAC.c_str(), alias.c_str(), _matchRSSI, _matchType.c_str());
-        _newMatch = false;
+                      mac, alias.c_str(), rssi, type);
     }
 
     // Auto-save every 10s
@@ -205,20 +212,24 @@ void DetectorModule::onBLEAdvertisement(const NimBLEAdvertisedDevice* device) {
 
             unsigned long sinceLast = now - dev.lastSeen;
             if (sinceLast >= 30000) {
-                _matchMAC = mac;
+                portENTER_CRITICAL(&_matchMux);
+                strlcpy(_matchMAC, mac.c_str(), sizeof(_matchMAC));
                 _matchRSSI = rssi;
-                _matchFilter = matchedDesc;
-                _matchType = "RE-30s";
+                strlcpy(_matchFilter, matchedDesc.c_str(), sizeof(_matchFilter));
+                strlcpy(_matchType, "RE-30s", sizeof(_matchType));
                 _newMatch = true;
+                portEXIT_CRITICAL(&_matchMux);
                 hal::notify(hal::NOTIFY_DET_RE_30S);
                 dev.inCooldown = true;
                 dev.cooldownUntil = now + 10000;
             } else if (sinceLast >= 3000) {
-                _matchMAC = mac;
+                portENTER_CRITICAL(&_matchMux);
+                strlcpy(_matchMAC, mac.c_str(), sizeof(_matchMAC));
                 _matchRSSI = rssi;
-                _matchFilter = matchedDesc;
-                _matchType = "RE-3s";
+                strlcpy(_matchFilter, matchedDesc.c_str(), sizeof(_matchFilter));
+                strlcpy(_matchType, "RE-3s", sizeof(_matchType));
                 _newMatch = true;
+                portEXIT_CRITICAL(&_matchMux);
                 hal::notify(hal::NOTIFY_DET_RE_3S);
                 dev.inCooldown = true;
                 dev.cooldownUntil = now + 3000;
@@ -240,11 +251,13 @@ void DetectorModule::onBLEAdvertisement(const NimBLEAdvertisedDevice* device) {
     newDev.filterDescription = matchedDesc;
     _devices.push_back(newDev);
 
-    _matchMAC = mac;
+    portENTER_CRITICAL(&_matchMux);
+    strlcpy(_matchMAC, mac.c_str(), sizeof(_matchMAC));
     _matchRSSI = rssi;
-    _matchFilter = matchedDesc;
-    _matchType = "NEW";
+    strlcpy(_matchFilter, matchedDesc.c_str(), sizeof(_matchFilter));
+    strlcpy(_matchType, "NEW", sizeof(_matchType));
     _newMatch = true;
+    portEXIT_CRITICAL(&_matchMux);
     hal::notify(hal::NOTIFY_DET_NEW_DEVICE);
 }
 

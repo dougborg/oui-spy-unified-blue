@@ -18,8 +18,11 @@ bool isOdidVendorIE(const uint8_t* ie_data, size_t ie_len) {
 }
 
 int findOdidBeaconIE(const uint8_t* payload, int length, int startOffset, int* odid_len) {
-    if (!payload || !odid_len)
+    if (!payload || !odid_len || length <= 0 || startOffset < 0 || startOffset >= length)
         return -1;
+
+    // IE layout: [type(1)][len(1)][OUI(3)+type(1)+counter(1) + ODID payload...]
+    static const int OUI_OVERHEAD = 5; // OUI(3) + type(1) + counter(1)
 
     int offset = startOffset;
     while (offset + 2 <= length) {
@@ -28,12 +31,13 @@ int findOdidBeaconIE(const uint8_t* payload, int length, int startOffset, int* o
         if (offset + 2 + len > length)
             break;
         if (typ == 0xdd && isOdidVendorIE(&payload[offset + 2], len)) {
-            // ODID payload starts after OUI (3 bytes) + type (1 byte) + counter (1 byte) = 5
-            int odid_start = offset + 7;
-            if (odid_start < length) {
-                *odid_len = length - odid_start;
-                return odid_start;
+            if (len <= OUI_OVERHEAD) {
+                offset += len + 2;
+                continue;
             }
+            int odid_start = offset + 2 + OUI_OVERHEAD;
+            *odid_len = len - OUI_OVERHEAD;
+            return odid_start;
         }
         offset += len + 2;
     }

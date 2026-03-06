@@ -1,6 +1,6 @@
 # ADR-002: Upgrade to ESP-IDF 5.x (Arduino-ESP32 v3.x)
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-03-04
 **Decision makers:** colonelpanichacks
 

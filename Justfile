@@ -47,7 +47,7 @@ clean:
     pio run -t clean
 
 test:
-    python3 -m pytest -q
+    uv run python3 -m pytest -q
 
 test-cpp:
     pio test -e native
@@ -56,26 +56,22 @@ test-cpp:
 coverage-cpp:
     pio test -e native
     pio test -e native_parser
-    python3 -m gcovr --root . --txt --print-summary \
+    uv run python3 -m gcovr --root . --txt --print-summary \
         --fail-under-line 35 \
-        --filter src/protocols/opendroneid.c \
-        --filter src/protocols/wifi.c \
-        --filter src/modules/detector_logic.cpp \
-        --filter src/modules/flockyou_logic.cpp \
-        --filter src/modules/foxhunter_logic.cpp \
-        --filter src/modules/skyspy_logic.cpp \
-        --filter src/hal/buzzer_logic.cpp \
-        --filter src/hal/neopixel_logic.cpp \
+        --filter 'src/protocols/.*\.c' \
+        --filter 'src/modules/.*_logic\.cpp' \
+        --filter 'src/hal/.*_logic\.cpp' \
         --xml-pretty --xml coverage-native.xml
 
 lint:
     pre-commit run --all-files
 
 analyze-cpp:
-        cppcheck --quiet --error-exitcode=1 \
-            --enable=warning,performance \
-            --inline-suppr --suppress=missingIncludeSystem \
-            -I src -I src/protocols src/app src/hal src/modules src/storage src/web src/protocols
+    cppcheck --quiet --error-exitcode=1 \
+        --enable=warning,performance \
+        --inline-suppr --suppress=missingIncludeSystem \
+        -I src -I src/protocols \
+        src/app src/hal src/modules src/protocols src/storage src/web
 
 quality:
     just lint
@@ -87,10 +83,74 @@ quality:
     just web-typecheck
 
 erase:
-    python scripts/flash.py --erase
+    uv run python scripts/flash.py --erase
 
-flash bin="":
-    if [[ -n "{{bin}}" ]]; then python scripts/flash.py "{{bin}}"; else python scripts/flash.py; fi
+flash:
+    uv run python scripts/flash.py
+
+flash-build:
+    uv run python scripts/flash.py --build -y
+
+flash-release tag="":
+    uv run python scripts/flash.py --release {{tag}} -y
+
+flash-batch:
+    uv run python scripts/flash.py --batch
+
+# ---------------------------------------------------------------------------
+# Docker targets — run inside the devcontainer image, no local env needed
+# ---------------------------------------------------------------------------
+
+docker_image := "ghcr.io/dougborg/oui-spy-unified-blue/devcontainer:latest"
+
+# Run a command inside the devcontainer image with the repo mounted
+_docker-run +cmd:
+    docker run --rm --init \
+        -v "{{justfile_directory()}}:/workspaces/oui-spy-unified-blue" \
+        -w /workspaces/oui-spy-unified-blue \
+        -e PLATFORMIO_CORE_DIR=/home/vscode/.platformio \
+        -u vscode \
+        {{docker_image}} \
+        bash -c 'git config --global --add safe.directory /workspaces/oui-spy-unified-blue && {{cmd}}'
+
+docker-setup:
+    just _docker-run 'pio pkg install -d . && cd web && npm ci && npm run generate:types'
+
+docker-build:
+    just _docker-run 'just build'
+
+docker-build-all:
+    just _docker-run 'just build-all'
+
+docker-test:
+    just _docker-run 'just test'
+
+docker-test-cpp:
+    just _docker-run 'just test-cpp'
+
+docker-coverage-cpp:
+    just _docker-run 'just coverage-cpp'
+
+docker-lint:
+    just _docker-run 'just lint'
+
+docker-analyze-cpp:
+    just _docker-run 'just analyze-cpp'
+
+docker-web-lint:
+    just _docker-run 'just web-lint'
+
+docker-web-test:
+    just _docker-run 'just web-test'
+
+docker-web-typecheck:
+    just _docker-run 'just web-typecheck'
+
+docker-web-build:
+    just _docker-run 'just web-build'
+
+docker-quality:
+    just _docker-run 'just quality'
 
 devcontainer-auto:
     bash .devcontainer/select-profile.sh auto
