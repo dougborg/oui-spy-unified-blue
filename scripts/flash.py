@@ -76,10 +76,13 @@ def _gh_repo():
             continue
         # ssh: git@github.com:owner/repo.git
         if "github.com:" in url:
-            return url.split("github.com:")[-1].removesuffix(".git")
+            slug = url.split("github.com:")[-1]
+            return slug[:-4] if slug.endswith(".git") else slug
         # https: https://github.com/owner/repo.git
         if "github.com/" in url:
-            return "/".join(url.split("github.com/")[-1].removesuffix(".git").split("/")[:2])
+            slug = url.split("github.com/")[-1]
+            slug = slug[:-4] if slug.endswith(".git") else slug
+            return "/".join(slug.split("/")[:2])
     return None
 
 
@@ -106,7 +109,10 @@ def _download_file(url, dest):
     try:
         req = urllib.request.Request(url, headers={"Accept": "application/octet-stream"})
         with urllib.request.urlopen(req) as resp, open(dest, "wb") as f:
-            while chunk := resp.read(64 * 1024):
+            while True:
+                chunk = resp.read(64 * 1024)
+                if not chunk:
+                    break
                 f.write(chunk)
         return True
     except urllib.error.HTTPError as e:
