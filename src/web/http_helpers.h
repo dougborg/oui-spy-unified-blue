@@ -108,7 +108,7 @@ inline esp_err_t sendJSON(httpd_req_t* req, int status, const char* json) {
     case 404: reason = "Not Found"; break;
     case 500: reason = "Internal Server Error"; break;
     default:
-        snprintf(statusBuf, sizeof(statusBuf), "%d Error", status);
+        snprintf(statusBuf, sizeof(statusBuf), "%d", status);
         reason = nullptr;
         break;
     }

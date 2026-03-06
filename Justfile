@@ -92,7 +92,7 @@ flash-build:
     uv run python scripts/flash.py --build
 
 flash-release tag="":
-    if [[ -n "{{tag}}" ]]; then uv run python scripts/flash.py --release "{{tag}}"; else uv run python scripts/flash.py --release; fi
+    uv run python scripts/flash.py --release {{tag}}
 
 flash-batch:
     uv run python scripts/flash.py --batch

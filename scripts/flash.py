@@ -88,18 +88,23 @@ def _gh_repo():
 
 def _verify_checksum(bin_path, checksums_path):
     """Verify a firmware binary against a SHA256SUMS.txt file. Returns True if valid."""
-    sha = hashlib.sha256(open(bin_path, "rb").read()).hexdigest()
+    sha256 = hashlib.sha256()
+    with open(bin_path, "rb") as f:
+        for chunk in iter(lambda: f.read(64 * 1024), b""):
+            sha256.update(chunk)
+    sha = sha256.hexdigest()
     basename = os.path.basename(bin_path)
-    for line in open(checksums_path):
-        parts = line.strip().split()
-        if len(parts) == 2 and parts[1].lstrip("*") == basename:
-            if parts[0] == sha:
-                print(f"  Checksum OK: {sha[:16]}...")
-                return True
-            print(f"  Checksum MISMATCH!")
-            print(f"    Expected: {parts[0]}")
-            print(f"    Got:      {sha}")
-            return False
+    with open(checksums_path, "r", encoding="utf-8") as f:
+        for line in f:
+            parts = line.strip().split()
+            if len(parts) == 2 and parts[1].lstrip("*") == basename:
+                if parts[0] == sha:
+                    print(f"  Checksum OK: {sha[:16]}...")
+                    return True
+                print(f"  Checksum MISMATCH!")
+                print(f"    Expected: {parts[0]}")
+                print(f"    Got:      {sha}")
+                return False
     print(f"  Warning: {basename} not found in checksums file, skipping verification")
     return True
 
