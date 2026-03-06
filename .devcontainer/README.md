@@ -63,10 +63,13 @@ just web-typecheck       # TypeScript type checks
 just quality             # all of the above
 ```
 
-## Docker targets (no local env needed)
+## Docker targets (recommended — no local env needed)
 
-Every build/test/lint target has a `docker-` counterpart that runs inside the
-published devcontainer image. Only Docker is required on the host.
+The `docker-` targets are the easiest way to build and test without opening a
+devcontainer. They run inside the published devcontainer image so every
+contributor gets an identical toolchain — no "works on my machine" issues and no
+need to install PlatformIO, Node.js, or Python locally. Only Docker and `just`
+are required on the host.
 
 ```bash
 just docker-setup        # first-time: install pio packages + web deps
@@ -106,19 +109,17 @@ just monitor
 
 ### macOS
 
-Use the default `devcontainer.json` for build/dev. USB passthrough can be limited depending on Docker Desktop setup.
+USB passthrough from containers can be limited depending on Docker Desktop setup. Use docker targets to build and flash from the host:
 
-- Build: `just build` (in-container) or `just docker-build` (from host)
-- Flash from host: `just flash`
+- Build: `just docker-build`
+- Flash: `just flash`
 
 ### Windows (Docker Desktop + WSL2)
 
-Use the default `devcontainer.json` for build/dev.
+USB forwarding to WSL can vary by setup (`usbipd-win` + WSL attach). Use docker targets to build and flash from the host:
 
-For serial flashing, USB forwarding to WSL can vary by setup (`usbipd-win` + WSL attach). If serial isn't visible in-container, flash from host instead.
-
-- Build: `just build` (in-container) or `just docker-build` (from host)
-- Flash from host: `just flash`
+- Build: `just docker-build`
+- Flash: `just flash`
 
 ## Quick reset to portable default
 

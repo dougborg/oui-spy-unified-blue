@@ -275,9 +275,9 @@ just web-typecheck      # TypeScript type checks
 just quality            # all of the above
 ```
 
-### Docker targets (no local env needed)
+### Docker targets (recommended — no local env needed)
 
-Every target above has a `docker-` counterpart that runs inside the published devcontainer image. Only Docker and `just` are required on the host — no PlatformIO, Node.js, or Python needed:
+The `docker-` targets are the easiest way to build and test. They run inside the published devcontainer image so every contributor gets an identical toolchain — no "works on my machine" issues and no need to install PlatformIO, Node.js, or Python locally. Only Docker and `just` are required on the host:
 
 ```bash
 just docker-setup        # one-time: install pio packages + web deps
