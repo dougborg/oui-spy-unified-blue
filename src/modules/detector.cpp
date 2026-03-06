@@ -165,13 +165,20 @@ void DetectorModule::loop() {
     if (!_enabled)
         return;
 
-    // Output JSON for new matches
+    // Output JSON for new matches — copy under lock then print outside
     if (_newMatch) {
-        String alias = getAlias(_matchMAC);
+        String mac, type;
+        int rssi;
+        portENTER_CRITICAL(&_matchMux);
+        mac = _matchMAC;
+        rssi = _matchRSSI;
+        type = _matchType;
+        _newMatch = false;
+        portEXIT_CRITICAL(&_matchMux);
+        String alias = getAlias(mac);
         Serial.printf("{\"module\":\"detector\",\"mac\":\"%s\",\"alias\":\"%s\",\"rssi\":%d,"
                       "\"type\":\"%s\"}\n",
-                      _matchMAC.c_str(), alias.c_str(), _matchRSSI, _matchType.c_str());
-        _newMatch = false;
+                      mac.c_str(), alias.c_str(), rssi, type.c_str());
     }
 
     // Auto-save every 10s
@@ -205,20 +212,24 @@ void DetectorModule::onBLEAdvertisement(const NimBLEAdvertisedDevice* device) {
 
             unsigned long sinceLast = now - dev.lastSeen;
             if (sinceLast >= 30000) {
+                portENTER_CRITICAL(&_matchMux);
                 _matchMAC = mac;
                 _matchRSSI = rssi;
                 _matchFilter = matchedDesc;
                 _matchType = "RE-30s";
                 _newMatch = true;
+                portEXIT_CRITICAL(&_matchMux);
                 hal::notify(hal::NOTIFY_DET_RE_30S);
                 dev.inCooldown = true;
                 dev.cooldownUntil = now + 10000;
             } else if (sinceLast >= 3000) {
+                portENTER_CRITICAL(&_matchMux);
                 _matchMAC = mac;
                 _matchRSSI = rssi;
                 _matchFilter = matchedDesc;
                 _matchType = "RE-3s";
                 _newMatch = true;
+                portEXIT_CRITICAL(&_matchMux);
                 hal::notify(hal::NOTIFY_DET_RE_3S);
                 dev.inCooldown = true;
                 dev.cooldownUntil = now + 3000;
@@ -240,11 +251,13 @@ void DetectorModule::onBLEAdvertisement(const NimBLEAdvertisedDevice* device) {
     newDev.filterDescription = matchedDesc;
     _devices.push_back(newDev);
 
+    portENTER_CRITICAL(&_matchMux);
     _matchMAC = mac;
     _matchRSSI = rssi;
     _matchFilter = matchedDesc;
     _matchType = "NEW";
     _newMatch = true;
+    portEXIT_CRITICAL(&_matchMux);
     hal::notify(hal::NOTIFY_DET_NEW_DEVICE);
 }
 

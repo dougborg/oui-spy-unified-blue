@@ -3,6 +3,7 @@
 #include "../hal/ble_mgr.h"
 #include "module.h"
 #include <esp_http_server.h>
+#include <freertos/portmacro.h>
 #include <vector>
 
 struct DetDeviceInfo {
@@ -77,7 +78,8 @@ class DetectorModule : public IModule, public hal::BLEListener {
     bool _buzzerEnabled = true;
     bool _ledEnabled = true;
 
-    // Serial output from BLE callback
+    // Serial output from BLE callback (guarded by _matchMux)
+    portMUX_TYPE _matchMux = portMUX_INITIALIZER_UNLOCKED;
     volatile bool _newMatch = false;
     String _matchMAC;
     int _matchRSSI = 0;
