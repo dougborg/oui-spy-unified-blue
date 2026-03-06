@@ -300,7 +300,7 @@ This repo includes a ready-to-use devcontainer in `.devcontainer/` with Platform
 
 The devcontainer supports multiple profiles. See `.devcontainer/README.md` for Linux USB passthrough and host-specific setup.
 
-> **macOS note:** USB passthrough from containers can be limited. Build in-container (`just build`) and flash from host (`just flash`).
+> **macOS note:** USB passthrough from containers can be limited. Build from host (`just docker-build`) and flash from host (`just flash`).
 
 ---
 
