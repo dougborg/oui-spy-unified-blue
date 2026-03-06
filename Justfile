@@ -89,10 +89,10 @@ flash:
     uv run python scripts/flash.py
 
 flash-build:
-    uv run python scripts/flash.py --build
+    uv run python scripts/flash.py --build -y
 
 flash-release tag="":
-    uv run python scripts/flash.py --release {{tag}}
+    uv run python scripts/flash.py --release {{tag}} -y
 
 flash-batch:
     uv run python scripts/flash.py --batch

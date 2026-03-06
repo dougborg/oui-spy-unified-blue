@@ -45,6 +45,33 @@ def test_find_firmware_single_bin_in_firmware_dir(monkeypatch, tmp_path):
     assert flash.find_firmware() == str(firmware)
 
 
+def test_find_port_auto_selects_first(monkeypatch):
+    ports = [
+        SimpleNamespace(device="/dev/ttyUSB0", vid=0x303A, description="Espressif USB"),
+        SimpleNamespace(device="/dev/ttyUSB1", vid=0x303A, description="Espressif USB"),
+    ]
+    monkeypatch.setattr(flash.serial.tools.list_ports, "comports", lambda: ports)
+
+    assert flash.find_port(auto_confirm=True) == "/dev/ttyUSB0"
+
+
+def test_find_firmware_auto_selects_newest(monkeypatch, tmp_path):
+    firmware_dir = tmp_path / "firmware"
+    firmware_dir.mkdir()
+    older = firmware_dir / "older.bin"
+    newer = firmware_dir / "newer.bin"
+    older.write_bytes(b"older")
+    newer.write_bytes(b"newer")
+    os.utime(older, (1_700_000_000, 1_700_000_000))
+    os.utime(newer, (1_800_000_000, 1_800_000_000))
+
+    monkeypatch.setattr(flash, "FIRMWARE_DIR", str(firmware_dir))
+    monkeypatch.setattr(flash, "BUILD_BIN", str(tmp_path / "nonexistent.bin"))
+
+    selected = Path(flash.find_firmware(auto_confirm=True))
+    assert selected.name == "newer.bin"
+
+
 def test_find_firmware_prompts_for_multiple_bins(monkeypatch, tmp_path):
     firmware_dir = tmp_path / "firmware"
     firmware_dir.mkdir()

@@ -8,6 +8,7 @@ a guided menu, or use CLI flags for automation.
     python scripts/flash.py           # interactive menu
     python scripts/flash.py --release # download + flash latest release
     python scripts/flash.py --build   # flash local build output
+    python scripts/flash.py --build -y # flash local build, no prompts
     python scripts/flash.py --batch   # batch-flash production run
 
 Works on macOS, Linux, and Windows.
@@ -200,7 +201,7 @@ def download_release(tag=None):
 
 # -- Port detection --------------------------------------------------------
 
-def find_port():
+def find_port(auto_confirm=False):
     """Auto-detect the ESP32 serial port (macOS, Linux, Windows)."""
     ports = serial.tools.list_ports.comports()
     candidates = []
@@ -229,6 +230,8 @@ def find_port():
     if len(candidates) == 1:
         return candidates[0].device
     if len(candidates) > 1:
+        if auto_confirm:
+            return candidates[0].device
         print("\n  Multiple serial ports found:\n")
         for i, p in enumerate(candidates):
             desc = p.description or "unknown"
@@ -274,7 +277,7 @@ def find_local_build():
     return None
 
 
-def find_firmware(path_arg=None):
+def find_firmware(path_arg=None, auto_confirm=False):
     """Locate the .bin file to flash.
 
     Search order: explicit path -> local build -> firmware/ dir -> CWD.
@@ -297,6 +300,8 @@ def find_firmware(path_arg=None):
         if len(bins) == 1:
             return bins[0]
         if len(bins) > 1:
+            if auto_confirm:
+                return bins[0]
             print("\n  Multiple .bin files found:\n")
             for i, b in enumerate(bins):
                 size = os.path.getsize(b) / 1024
@@ -385,7 +390,7 @@ def erase(port):
 
 # -- Batch mode ------------------------------------------------------------
 
-def batch_mode(firmware, do_erase=False):
+def batch_mode(firmware, do_erase=False, auto_confirm=False):
     """Flash multiple boards one after another."""
     print(BANNER)
     size_kb = os.path.getsize(firmware) / 1024
@@ -408,6 +413,8 @@ def batch_mode(firmware, do_erase=False):
         # Wait for a board to appear
         port = wait_for_port(timeout=300)  # 5 min timeout
         if not port:
+            if auto_confirm:
+                break
             print("\n  No board detected. Still waiting? Plug one in and try again.")
             try:
                 input("  Press Enter to retry, Ctrl+C to quit: ")
@@ -425,6 +432,9 @@ def batch_mode(firmware, do_erase=False):
             fail_count += 1
 
         print(f"\n  -- Score: {success_count} flashed, {fail_count} failed --")
+
+        if auto_confirm:
+            break
 
         try:
             resp = input("\n  Swap board and press Enter for next (q to quit): ").strip().lower()
@@ -450,10 +460,10 @@ def batch_mode(firmware, do_erase=False):
 
 # -- Flash helpers for specific sources ------------------------------------
 
-def flash_firmware(firmware, do_erase=False):
+def flash_firmware(firmware, do_erase=False, auto_confirm=False):
     """Find port and flash a given firmware binary."""
     print(BANNER)
-    port = find_port()
+    port = find_port(auto_confirm=auto_confirm)
     if not port:
         print("\n  No ESP32 detected. Is the board plugged in?")
         print("  Make sure drivers are installed (CH340/CP210x).\n")
@@ -461,25 +471,26 @@ def flash_firmware(firmware, do_erase=False):
 
     print(f"  Found: {port}")
 
-    confirm = input("\n  Flash? [Y/n]: ").strip().lower()
-    if confirm and confirm != "y":
-        print("  Aborted.")
-        sys.exit(0)
+    if not auto_confirm:
+        confirm = input("\n  Flash? [Y/n]: ").strip().lower()
+        if confirm and confirm != "y":
+            print("  Aborted.")
+            sys.exit(0)
 
     ok = flash_one(port, firmware, do_erase=do_erase)
     if not ok:
         sys.exit(1)
 
 
-def do_flash_release(tag=None, do_erase=False):
+def do_flash_release(tag=None, do_erase=False, auto_confirm=False):
     """Download a release and flash it."""
     firmware = download_release(tag)
     if not firmware:
         sys.exit(1)
-    flash_firmware(firmware, do_erase=do_erase)
+    flash_firmware(firmware, do_erase=do_erase, auto_confirm=auto_confirm)
 
 
-def do_flash_build(do_erase=False):
+def do_flash_build(do_erase=False, auto_confirm=False):
     """Flash the local PlatformIO build output."""
     build = find_local_build()
     if not build:
@@ -490,7 +501,7 @@ def do_flash_build(do_erase=False):
     size_kb = os.path.getsize(build) / 1024
     mtime = time.strftime("%Y-%m-%d %H:%M", time.localtime(os.path.getmtime(build)))
     print(f"\n  Local build: {os.path.basename(build)} ({size_kb:.0f} KB, built {mtime})")
-    flash_firmware(build, do_erase=do_erase)
+    flash_firmware(build, do_erase=do_erase, auto_confirm=auto_confirm)
 
 
 # -- Interactive menu ------------------------------------------------------
@@ -607,17 +618,18 @@ def main():
     do_batch = "--batch" in args
     do_release = "--release" in args
     do_build = "--build" in args
+    auto_confirm = "-y" in args or "--yes" in args
     bin_path = None
     release_tag = None
 
     i = 0
     while i < len(args):
         a = args[i]
-        if a in ("--erase", "--batch", "--build"):
+        if a in ("--erase", "--batch", "--build", "-y", "--yes"):
             pass
         elif a == "--release":
             # Next arg might be a tag (if it doesn't start with --)
-            if i + 1 < len(args) and not args[i + 1].startswith("--"):
+            if i + 1 < len(args) and not args[i + 1].startswith("-"):
                 release_tag = args[i + 1]
                 i += 1
         elif a in ("-h", "--help"):
@@ -633,12 +645,14 @@ def main():
 
   Options:
     --erase            Erase entire flash before writing
+    -y, --yes          Skip confirmation prompts (for CI / just targets)
 
   Examples:
     python scripts/flash.py                  # interactive menu
     python scripts/flash.py --release        # flash latest release
     python scripts/flash.py --release v1.0   # flash specific release
     python scripts/flash.py --build          # flash local build
+    python scripts/flash.py --build -y       # flash local build, no prompts
     python scripts/flash.py --batch --erase  # batch flash with erase
     python scripts/flash.py firmware.bin     # flash specific file
 """)
@@ -650,15 +664,15 @@ def main():
     _check_esptool()
 
     if do_release:
-        do_flash_release(tag=release_tag, do_erase=do_erase)
+        do_flash_release(tag=release_tag, do_erase=do_erase, auto_confirm=auto_confirm)
         return
 
     if do_build:
-        do_flash_build(do_erase=do_erase)
+        do_flash_build(do_erase=do_erase, auto_confirm=auto_confirm)
         return
 
     # Find firmware (explicit path, local build, firmware/ dir, or CWD)
-    firmware = find_firmware(bin_path)
+    firmware = find_firmware(bin_path, auto_confirm=auto_confirm)
     if not firmware:
         print(f"\n  No .bin file found.")
         print(f"  Build first:       just build  (or: just docker-build)")
@@ -667,19 +681,20 @@ def main():
         sys.exit(1)
 
     if do_batch:
-        batch_mode(firmware, do_erase=do_erase)
+        batch_mode(firmware, do_erase=do_erase, auto_confirm=auto_confirm)
         return
 
     # Single flash
-    flash_firmware(firmware, do_erase=do_erase)
+    flash_firmware(firmware, do_erase=do_erase, auto_confirm=auto_confirm)
 
-    # Offer to flash another
-    try:
-        resp = input("\n  Flash another board? [y/N]: ").strip().lower()
-        if resp == "y":
-            batch_mode(firmware, do_erase=do_erase)
-    except (KeyboardInterrupt, EOFError):
-        pass
+    # Offer to flash another (skip in auto-confirm mode)
+    if not auto_confirm:
+        try:
+            resp = input("\n  Flash another board? [y/N]: ").strip().lower()
+            if resp == "y":
+                batch_mode(firmware, do_erase=do_erase)
+        except (KeyboardInterrupt, EOFError):
+            pass
 
     print()
 
