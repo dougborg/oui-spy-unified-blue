@@ -13,6 +13,7 @@ dev = [
     "platformio>=6.0",
     "esptool>=4.0",
     "pyserial>=3.5",
+    "questionary>=2.1.1",
 ]
 
 [tool.pytest.ini_options]

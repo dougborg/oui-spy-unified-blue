@@ -2,30 +2,33 @@
 """
 OUI Spy Unified Blue -- Firmware Flasher
 
-Drop your .bin in the firmware/ folder (or pass a path), plug in your
-XIAO ESP32-S3, and run:
+Interactive flasher for XIAO ESP32-S3 boards. Run with no arguments for
+a guided menu, or use CLI flags for automation.
 
-    python scripts/flash.py
-
-Supports batch flashing -- after each board finishes, swap it out and
-press Enter to flash the next one. Great for production runs.
+    python scripts/flash.py           # interactive menu
+    python scripts/flash.py --release # download + flash latest release
+    python scripts/flash.py --build   # flash local build output
+    python scripts/flash.py --batch   # batch-flash production run
 
 Works on macOS, Linux, and Windows.
 
-Requirements:  uv sync  (or: pip install esptool pyserial)
+Requirements:  uv sync  (or: pip install esptool pyserial questionary)
 """
 
 import glob
+import hashlib
 import io
 import os
+import shutil
+import subprocess
 import sys
 import time
-import subprocess
+
 import serial.tools.list_ports
 
 # Force UTF-8 on Windows so box-drawing / special chars don't garble
 if sys.platform == "win32":
-    os.system("")  # enable ANSI/VT100 on Win10+ terminals
+    os.system("")  # noqa: S605 S607 -- static call to enable ANSI/VT100 on Win10+ terminals
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
@@ -37,7 +40,11 @@ if sys.platform == "win32":
 APP_OFFSET    = "0x10000"
 BAUD          = "921600"
 CHIP          = "esp32s3"
-FIRMWARE_DIR  = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "firmware")
+PROJECT_ROOT  = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+FIRMWARE_DIR  = os.path.join(PROJECT_ROOT, "firmware")
+BUILD_BIN     = os.path.join(PROJECT_ROOT, ".pio", "build", "seeed_xiao_esp32s3", "firmware.bin")
+RELEASE_ASSET = "oui-spy-unified-blue-firmware.bin"
+CHECKSUMS_ASSET = "SHA256SUMS.txt"
 
 # Known USB VID:PID pairs for ESP32-S3 / common UART bridges
 ESP_VIDS = {
@@ -52,6 +59,95 @@ BANNER = """
   |   OUI Spy Unified Blue -- Flasher        |
   +==========================================+"""
 
+
+# -- GitHub release download -----------------------------------------------
+
+def _gh_repo():
+    """Detect the GitHub repo from git remotes (prefers upstream, falls back to origin)."""
+    for remote in ("upstream", "origin"):
+        try:
+            url = subprocess.run(
+                ["git", "remote", "get-url", remote],
+                capture_output=True, text=True, check=True, cwd=PROJECT_ROOT,
+            ).stdout.strip()
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            continue
+        # ssh: git@github.com:owner/repo.git
+        if "github.com:" in url:
+            return url.split("github.com:")[-1].removesuffix(".git")
+        # https: https://github.com/owner/repo.git
+        if "github.com/" in url:
+            return "/".join(url.split("github.com/")[-1].removesuffix(".git").split("/")[:2])
+    return None
+
+
+def _verify_checksum(bin_path, checksums_path):
+    """Verify a firmware binary against a SHA256SUMS.txt file. Returns True if valid."""
+    sha = hashlib.sha256(open(bin_path, "rb").read()).hexdigest()
+    basename = os.path.basename(bin_path)
+    for line in open(checksums_path):
+        parts = line.strip().split()
+        if len(parts) == 2 and parts[1].lstrip("*") == basename:
+            if parts[0] == sha:
+                print(f"  Checksum OK: {sha[:16]}...")
+                return True
+            print(f"  Checksum MISMATCH!")
+            print(f"    Expected: {parts[0]}")
+            print(f"    Got:      {sha}")
+            return False
+    print(f"  Warning: {basename} not found in checksums file, skipping verification")
+    return True
+
+
+def download_release(tag=None):
+    """Download a firmware release from GitHub. Returns path to .bin or None."""
+    if not shutil.which("gh"):
+        print("\n  'gh' CLI not found. Install it: https://cli.github.com/")
+        return None
+
+    repo = _gh_repo()
+    if not repo:
+        print("\n  Could not detect GitHub repo from git remotes.")
+        return None
+
+    os.makedirs(FIRMWARE_DIR, exist_ok=True)
+
+    tag_label = tag or "latest"
+    print(f"\n  Downloading {tag_label} release from {repo}...")
+
+    # Build gh command
+    gh_cmd = ["gh", "release", "download", "--repo", repo, "--dir", FIRMWARE_DIR,
+              "--pattern", RELEASE_ASSET, "--pattern", CHECKSUMS_ASSET, "--clobber"]
+    if tag:
+        gh_cmd.append(tag)
+
+    result = subprocess.run(gh_cmd)
+    if result.returncode != 0:
+        print(f"\n  Failed to download release. Is there a release tagged '{tag_label}'?")
+        return None
+
+    bin_path = os.path.join(FIRMWARE_DIR, RELEASE_ASSET)
+    checksums_path = os.path.join(FIRMWARE_DIR, CHECKSUMS_ASSET)
+
+    if not os.path.isfile(bin_path):
+        print(f"\n  Download succeeded but {RELEASE_ASSET} not found.")
+        return None
+
+    # Verify checksum
+    if os.path.isfile(checksums_path):
+        if not _verify_checksum(bin_path, checksums_path):
+            os.remove(bin_path)
+            return None
+        os.remove(checksums_path)
+    else:
+        print("  Warning: no checksums file in release, skipping verification")
+
+    size_kb = os.path.getsize(bin_path) / 1024
+    print(f"  Downloaded: {RELEASE_ASSET} ({size_kb:.0f} KB)")
+    return bin_path
+
+
+# -- Port detection --------------------------------------------------------
 
 def find_port():
     """Auto-detect the ESP32 serial port (macOS, Linux, Windows)."""
@@ -118,14 +214,31 @@ def wait_for_port(timeout=30):
     return None
 
 
+# -- Firmware discovery ----------------------------------------------------
+
+def find_local_build():
+    """Return the local PlatformIO build output if it exists."""
+    if os.path.isfile(BUILD_BIN):
+        return BUILD_BIN
+    return None
+
+
 def find_firmware(path_arg=None):
-    """Locate the .bin file to flash."""
+    """Locate the .bin file to flash.
+
+    Search order: explicit path -> local build -> firmware/ dir -> CWD.
+    """
     # Explicit path from CLI
     if path_arg:
         if os.path.isfile(path_arg):
             return os.path.abspath(path_arg)
         print(f"\n  File not found: {path_arg}")
         sys.exit(1)
+
+    # Local PlatformIO build output
+    build = find_local_build()
+    if build:
+        return build
 
     # Look in firmware/ folder
     if os.path.isdir(FIRMWARE_DIR):
@@ -155,6 +268,8 @@ def find_firmware(path_arg=None):
 
     return None
 
+
+# -- Flash / erase ---------------------------------------------------------
 
 def flash_one(port, firmware, do_erase=False, board_num=None):
     """Flash a single board. Returns True on success."""
@@ -199,7 +314,7 @@ def flash_one(port, firmware, do_erase=False, board_num=None):
             return False
     except FileNotFoundError:
         print("  esptool not found. Install it:\n")
-        print("    pip install esptool\n")
+        print("    uv sync\n")
         sys.exit(1)
 
 
@@ -216,6 +331,8 @@ def erase(port):
     subprocess.run(cmd)
     print()
 
+
+# -- Batch mode ------------------------------------------------------------
 
 def batch_mode(firmware, do_erase=False):
     """Flash multiple boards one after another."""
@@ -280,64 +397,10 @@ def batch_mode(firmware, do_erase=False):
 """)
 
 
-def main():
-    # Parse args
-    args = sys.argv[1:]
-    do_erase = "--erase" in args
-    do_batch = "--batch" in args
-    bin_path = None
+# -- Flash helpers for specific sources ------------------------------------
 
-    for a in args:
-        if a in ("--erase", "--batch"):
-            continue
-        if a in ("-h", "--help"):
-            print("""
-  Usage:  python scripts/flash.py [firmware.bin] [--erase] [--batch]
-
-  Options:
-    firmware.bin   Path to .bin file (auto-detects from firmware/ folder)
-    --erase        Erase entire flash before writing
-    --batch        Batch mode: flash multiple boards one after another
-
-  Single board:
-    python scripts/flash.py
-
-  Batch flash (production run):
-    python scripts/flash.py --batch
-    python scripts/flash.py --batch --erase
-
-  Setup:
-    uv sync
-    mkdir firmware
-    # drop your .bin in firmware/
-    python scripts/flash.py
-""")
-            sys.exit(0)
-        bin_path = a
-
-    # Check esptool is installed
-    try:
-        subprocess.run([sys.executable, "-m", "esptool", "version"],
-                       capture_output=True, check=True)
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        print("\n  esptool not found. Install it:\n")
-        print("    pip install esptool\n")
-        sys.exit(1)
-
-    # Find firmware first (same for all boards)
-    firmware = find_firmware(bin_path)
-    if not firmware:
-        print(f"\n  No .bin file found.")
-        print(f"  Drop your firmware in:  {FIRMWARE_DIR}/")
-        print(f"  Or pass it directly:    python scripts/flash.py my_firmware.bin\n")
-        sys.exit(1)
-
-    # Batch mode
-    if do_batch:
-        batch_mode(firmware, do_erase=do_erase)
-        return
-
-    # Single mode — find port
+def flash_firmware(firmware, do_erase=False):
+    """Find port and flash a given firmware binary."""
     print(BANNER)
     port = find_port()
     if not port:
@@ -355,6 +418,209 @@ def main():
     ok = flash_one(port, firmware, do_erase=do_erase)
     if not ok:
         sys.exit(1)
+
+
+def do_flash_release(tag=None, do_erase=False):
+    """Download a release and flash it."""
+    firmware = download_release(tag)
+    if not firmware:
+        sys.exit(1)
+    flash_firmware(firmware, do_erase=do_erase)
+
+
+def do_flash_build(do_erase=False):
+    """Flash the local PlatformIO build output."""
+    build = find_local_build()
+    if not build:
+        print(f"\n  No local build found at:")
+        print(f"    {BUILD_BIN}")
+        print(f"\n  Build first with: just build  (or: just docker-build)\n")
+        sys.exit(1)
+    size_kb = os.path.getsize(build) / 1024
+    mtime = time.strftime("%Y-%m-%d %H:%M", time.localtime(os.path.getmtime(build)))
+    print(f"\n  Local build: {os.path.basename(build)} ({size_kb:.0f} KB, built {mtime})")
+    flash_firmware(build, do_erase=do_erase)
+
+
+# -- Interactive menu ------------------------------------------------------
+
+def interactive_menu():
+    """Show an interactive menu when no arguments are provided."""
+    import questionary
+
+    print(BANNER)
+
+    # Gather info for the menu
+    build = find_local_build()
+    build_label = None
+    if build:
+        size_kb = os.path.getsize(build) / 1024
+        mtime = time.strftime("%Y-%m-%d %H:%M", time.localtime(os.path.getmtime(build)))
+        build_label = f"Flash local build ({size_kb:.0f} KB, built {mtime})"
+
+    firmware_bins = []
+    if os.path.isdir(FIRMWARE_DIR):
+        firmware_bins = sorted(glob.glob(os.path.join(FIRMWARE_DIR, "*.bin")),
+                               key=os.path.getmtime, reverse=True)
+
+    choices = []
+    choice_map = {}
+
+    if build_label:
+        choices.append(questionary.Choice(build_label, value="build"))
+        choice_map["build"] = build
+
+    label = "Flash latest GitHub release"
+    choices.append(questionary.Choice(label, value="release"))
+
+    if firmware_bins:
+        for b in firmware_bins:
+            size = os.path.getsize(b) / 1024
+            name = os.path.basename(b)
+            label = f"Flash firmware/{name} ({size:.0f} KB)"
+            key = f"file:{b}"
+            choices.append(questionary.Choice(label, value=key))
+            choice_map[key] = b
+
+    choices.append(questionary.Choice("Batch flash (production run)", value="batch"))
+    choices.append(questionary.Choice("Erase flash only", value="erase"))
+    choices.append(questionary.Separator())
+    choices.append(questionary.Choice("Quit", value="quit"))
+
+    print()
+    action = questionary.select(
+        "What would you like to do?",
+        choices=choices,
+    ).ask()
+
+    if action is None or action == "quit":
+        return
+
+    do_erase = False
+    if action not in ("erase",):
+        do_erase = questionary.confirm("Erase flash before writing?", default=False).ask()
+        if do_erase is None:
+            return
+
+    if action == "build":
+        flash_firmware(choice_map["build"], do_erase=do_erase)
+    elif action == "release":
+        tag = questionary.text(
+            "Release tag (leave blank for latest):",
+            default="",
+        ).ask()
+        if tag is None:
+            return
+        do_flash_release(tag=tag or None, do_erase=do_erase)
+    elif action.startswith("file:"):
+        flash_firmware(choice_map[action], do_erase=do_erase)
+    elif action == "batch":
+        firmware = find_firmware()
+        if not firmware:
+            print(f"\n  No .bin file found to batch-flash.")
+            print(f"  Build first or download a release.\n")
+            sys.exit(1)
+        batch_mode(firmware, do_erase=do_erase)
+    elif action == "erase":
+        port = find_port()
+        if not port:
+            print("\n  No ESP32 detected.")
+            sys.exit(1)
+        erase(port)
+
+
+# -- CLI entry point -------------------------------------------------------
+
+def _check_esptool():
+    """Verify esptool is installed."""
+    try:
+        subprocess.run([sys.executable, "-m", "esptool", "version"],
+                       capture_output=True, check=True)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        print("\n  esptool not found. Install it:\n")
+        print("    uv sync\n")
+        sys.exit(1)
+
+
+def main():
+    args = sys.argv[1:]
+
+    # No arguments -> interactive menu
+    if not args:
+        _check_esptool()
+        interactive_menu()
+        return
+
+    # Parse flags
+    do_erase = "--erase" in args
+    do_batch = "--batch" in args
+    do_release = "--release" in args
+    do_build = "--build" in args
+    bin_path = None
+    release_tag = None
+
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a in ("--erase", "--batch", "--build"):
+            pass
+        elif a == "--release":
+            # Next arg might be a tag (if it doesn't start with --)
+            if i + 1 < len(args) and not args[i + 1].startswith("--"):
+                release_tag = args[i + 1]
+                i += 1
+        elif a in ("-h", "--help"):
+            print("""
+  Usage:  python scripts/flash.py [options] [firmware.bin]
+
+  Modes:
+    (no args)          Interactive menu
+    --release [TAG]    Download + flash a GitHub release (default: latest)
+    --build            Flash local PlatformIO build output
+    --batch            Batch mode: flash multiple boards sequentially
+    firmware.bin       Flash a specific .bin file
+
+  Options:
+    --erase            Erase entire flash before writing
+
+  Examples:
+    python scripts/flash.py                  # interactive menu
+    python scripts/flash.py --release        # flash latest release
+    python scripts/flash.py --release v1.0   # flash specific release
+    python scripts/flash.py --build          # flash local build
+    python scripts/flash.py --batch --erase  # batch flash with erase
+    python scripts/flash.py firmware.bin     # flash specific file
+""")
+            sys.exit(0)
+        else:
+            bin_path = a
+        i += 1
+
+    _check_esptool()
+
+    if do_release:
+        do_flash_release(tag=release_tag, do_erase=do_erase)
+        return
+
+    if do_build:
+        do_flash_build(do_erase=do_erase)
+        return
+
+    # Find firmware (explicit path, local build, firmware/ dir, or CWD)
+    firmware = find_firmware(bin_path)
+    if not firmware:
+        print(f"\n  No .bin file found.")
+        print(f"  Build first:       just build  (or: just docker-build)")
+        print(f"  Download release:  just flash-release")
+        print(f"  Or pass directly:  python scripts/flash.py firmware.bin\n")
+        sys.exit(1)
+
+    if do_batch:
+        batch_mode(firmware, do_erase=do_erase)
+        return
+
+    # Single flash
+    flash_firmware(firmware, do_erase=do_erase)
 
     # Offer to flash another
     try:

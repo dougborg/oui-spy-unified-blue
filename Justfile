@@ -85,8 +85,17 @@ quality:
 erase:
     uv run python scripts/flash.py --erase
 
-flash bin="":
-    if [[ -n "{{bin}}" ]]; then uv run python scripts/flash.py "{{bin}}"; else uv run python scripts/flash.py; fi
+flash:
+    uv run python scripts/flash.py
+
+flash-build:
+    uv run python scripts/flash.py --build
+
+flash-release tag="":
+    if [[ -n "{{tag}}" ]]; then uv run python scripts/flash.py --release "{{tag}}"; else uv run python scripts/flash.py --release; fi
+
+flash-batch:
+    uv run python scripts/flash.py --batch
 
 # ---------------------------------------------------------------------------
 # Docker targets — run inside the devcontainer image, no local env needed
