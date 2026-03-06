@@ -240,7 +240,7 @@ pio device monitor          # serial output (115200 baud)
 
 ### Task Runner (just)
 
-A `Justfile` is included for common commands.
+All build, test, and quality commands are wrapped in `just` targets. Use them instead of calling tools directly — they ensure the correct environment and dependencies.
 
 ```bash
 # macOS
@@ -250,35 +250,37 @@ brew install just
 sudo apt-get install -y just
 ```
 
-Common tasks:
+Build and flash:
 
 ```bash
-just build
-just upload
-just monitor
-just flash
-just flash firmware/my_firmware.bin
+just build                       # build firmware
+just flash                       # flash via serial
+just flash firmware/my_build.bin # flash a specific binary
+just upload                      # flash via PlatformIO
+just monitor                     # serial monitor
 ```
 
-Quality tasks:
+Quality:
 
 ```bash
-just setup-dev          # install dev dependencies (pre-commit, pytest, gcovr)
-just test               # run Python tests
-just test-cpp           # run native C++ tests
-just coverage-cpp       # run tests + generate coverage report
-just analyze-cpp        # run cppcheck static analysis
-just lint               # run pre-commit (formatting, linting)
-just web-lint           # run Biome linter on web source
-just web-test           # run Vitest web tests
-just quality            # run all quality checks
+just setup-dev          # install dev dependencies (uv, pre-commit, pytest, gcovr)
+just test               # Python tests
+just test-cpp           # native C++ tests
+just coverage-cpp       # tests + coverage report (35% threshold)
+just analyze-cpp        # cppcheck static analysis
+just lint               # pre-commit (formatting, linting)
+just web-lint           # Biome linter on web source
+just web-test           # Vitest web tests
+just web-typecheck      # TypeScript type checks
+just quality            # all of the above
 ```
 
 ### Docker targets (no local env needed)
 
-Every build/test/lint target has a `docker-` counterpart that runs inside the published devcontainer image. Only Docker is required on the host:
+Every target above has a `docker-` counterpart that runs inside the published devcontainer image. Only Docker and `just` are required on the host — no PlatformIO, Node.js, or Python needed:
 
 ```bash
+just docker-setup        # one-time: install pio packages + web deps
 just docker-build        # build firmware
 just docker-test         # Python tests
 just docker-test-cpp     # native C++ tests
@@ -286,7 +288,7 @@ just docker-lint         # pre-commit (formatting, linting)
 just docker-quality      # all quality checks
 ```
 
-Run `just docker-setup` once after cloning to install PlatformIO packages and web dependencies inside the image volume. See `.devcontainer/README.md` for the full list of docker targets.
+See `.devcontainer/README.md` for the full list of docker targets.
 
 ### Dev Container (VS Code)
 
@@ -294,11 +296,11 @@ This repo includes a ready-to-use devcontainer in `.devcontainer/` with Platform
 
 1. Open the project in VS Code
 2. Run **Dev Containers: Reopen in Container**
-3. Build with `pio run`
+3. Use `just` targets to build, test, and lint
 
 The devcontainer supports multiple profiles. See `.devcontainer/README.md` for Linux USB passthrough and host-specific setup.
 
-> **macOS note:** USB passthrough from containers can be limited. Build in-container (`pio run`) and flash from host (`just flash`).
+> **macOS note:** USB passthrough from containers can be limited. Build in-container (`just build`) and flash from host (`just flash`).
 
 ---
 

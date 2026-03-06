@@ -44,24 +44,22 @@ The Docker image includes:
 
 ## In-container commands
 
-Build and flash:
+Use `just` targets for all tasks — they wrap the underlying tools and ensure
+the correct environment:
 
 ```bash
-pio run                  # build firmware
-pio run -t upload        # flash (Linux USB only)
-pio device monitor       # serial monitor
-```
-
-Quality checks:
-
-```bash
+just build               # build firmware
+just upload              # flash (Linux USB only)
+just monitor             # serial monitor
+just flash               # flash via flash.py
 just lint                # pre-commit (formatting, linting)
 just test                # Python tests
-just test-cpp            # native C++ tests (53 tests)
+just test-cpp            # native C++ tests
 just coverage-cpp        # tests + coverage report (35% threshold)
 just analyze-cpp         # cppcheck static analysis
 just web-lint            # Biome linter on web source
-just web-test            # Vitest web tests (18 tests)
+just web-test            # Vitest web tests
+just web-typecheck       # TypeScript type checks
 just quality             # all of the above
 ```
 
@@ -101,28 +99,26 @@ bash .devcontainer/select-profile.sh linux-usb
 Rebuild/reopen container, then build and flash inside:
 
 ```bash
-pio run
-pio run -t upload
-pio device monitor
+just build
+just upload
+just monitor
 ```
 
 ### macOS
 
 Use the default `devcontainer.json` for build/dev. USB passthrough can be limited depending on Docker Desktop setup.
 
-Recommended path:
-
-- Build in container: `pio run` or from host: `just docker-build`
-- Flash from host: `just flash` or `pio run -t upload`
+- Build: `just build` (in-container) or `just docker-build` (from host)
+- Flash from host: `just flash`
 
 ### Windows (Docker Desktop + WSL2)
 
 Use the default `devcontainer.json` for build/dev.
 
-For serial flashing, USB forwarding to WSL can vary by setup (`usbipd-win` + WSL attach). If serial isn't visible in-container, use host upload instead:
+For serial flashing, USB forwarding to WSL can vary by setup (`usbipd-win` + WSL attach). If serial isn't visible in-container, flash from host instead.
 
-- Build in container: `pio run` or from host: `just docker-build`
-- Flash from host: `just flash` or `pio run -t upload`
+- Build: `just build` (in-container) or `just docker-build` (from host)
+- Flash from host: `just flash`
 
 ## Quick reset to portable default
 
