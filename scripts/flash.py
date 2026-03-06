@@ -18,11 +18,13 @@ Requirements:  uv sync  (or: pip install esptool pyserial questionary)
 import glob
 import hashlib
 import io
+import json
 import os
-import shutil
 import subprocess
 import sys
 import time
+import urllib.error
+import urllib.request
 
 import serial.tools.list_ports
 
@@ -99,46 +101,84 @@ def _verify_checksum(bin_path, checksums_path):
     return True
 
 
-def download_release(tag=None):
-    """Download a firmware release from GitHub. Returns path to .bin or None."""
-    if not shutil.which("gh"):
-        print("\n  'gh' CLI not found. Install it: https://cli.github.com/")
+def _download_file(url, dest):
+    """Download a URL to a local file path. Returns True on success."""
+    try:
+        req = urllib.request.Request(url, headers={"Accept": "application/octet-stream"})
+        with urllib.request.urlopen(req) as resp, open(dest, "wb") as f:
+            while chunk := resp.read(64 * 1024):
+                f.write(chunk)
+        return True
+    except urllib.error.HTTPError as e:
+        print(f"  HTTP {e.code}: {e.reason}")
+        return False
+    except urllib.error.URLError as e:
+        print(f"  Network error: {e.reason}")
+        return False
+
+
+def _fetch_release_meta(repo, tag=None):
+    """Fetch release metadata from the GitHub API. Returns parsed JSON or None."""
+    if tag:
+        api_url = f"https://api.github.com/repos/{repo}/releases/tags/{tag}"
+    else:
+        api_url = f"https://api.github.com/repos/{repo}/releases/latest"
+
+    req = urllib.request.Request(api_url, headers={
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    })
+    try:
+        with urllib.request.urlopen(req) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return None
+        print(f"  GitHub API error: HTTP {e.code}")
+        return None
+    except urllib.error.URLError as e:
+        print(f"  Network error: {e.reason}")
         return None
 
+
+def download_release(tag=None):
+    """Download a firmware release from GitHub. Returns path to .bin or None."""
     repo = _gh_repo()
     if not repo:
         print("\n  Could not detect GitHub repo from git remotes.")
         return None
 
-    os.makedirs(FIRMWARE_DIR, exist_ok=True)
-
     tag_label = tag or "latest"
     print(f"\n  Downloading {tag_label} release from {repo}...")
 
-    # Build gh command
-    gh_cmd = ["gh", "release", "download", "--repo", repo, "--dir", FIRMWARE_DIR,
-              "--pattern", RELEASE_ASSET, "--pattern", CHECKSUMS_ASSET, "--clobber"]
-    if tag:
-        gh_cmd.append(tag)
-
-    result = subprocess.run(gh_cmd)
-    if result.returncode != 0:
-        print(f"\n  Failed to download release. Is there a release tagged '{tag_label}'?")
+    release = _fetch_release_meta(repo, tag)
+    if not release:
+        print(f"\n  No release found for '{tag_label}'.")
         return None
 
+    # Find asset download URLs
+    assets = {a["name"]: a["browser_download_url"] for a in release.get("assets", [])}
+    if RELEASE_ASSET not in assets:
+        print(f"\n  Release '{release.get('tag_name', tag_label)}' has no {RELEASE_ASSET} asset.")
+        return None
+
+    os.makedirs(FIRMWARE_DIR, exist_ok=True)
+
+    # Download firmware binary
     bin_path = os.path.join(FIRMWARE_DIR, RELEASE_ASSET)
-    checksums_path = os.path.join(FIRMWARE_DIR, CHECKSUMS_ASSET)
-
-    if not os.path.isfile(bin_path):
-        print(f"\n  Download succeeded but {RELEASE_ASSET} not found.")
+    print(f"  Fetching {RELEASE_ASSET}...")
+    if not _download_file(assets[RELEASE_ASSET], bin_path):
         return None
 
-    # Verify checksum
-    if os.path.isfile(checksums_path):
-        if not _verify_checksum(bin_path, checksums_path):
-            os.remove(bin_path)
-            return None
-        os.remove(checksums_path)
+    # Download and verify checksums
+    checksums_path = os.path.join(FIRMWARE_DIR, CHECKSUMS_ASSET)
+    if CHECKSUMS_ASSET in assets:
+        _download_file(assets[CHECKSUMS_ASSET], checksums_path)
+        if os.path.isfile(checksums_path):
+            if not _verify_checksum(bin_path, checksums_path):
+                os.remove(bin_path)
+                return None
+            os.remove(checksums_path)
     else:
         print("  Warning: no checksums file in release, skipping verification")
 

@@ -1,3 +1,5 @@
+import hashlib
+import json
 import os
 from pathlib import Path
 from types import SimpleNamespace
@@ -88,7 +90,6 @@ def test_find_local_build_returns_path_when_exists(monkeypatch, tmp_path):
 
 
 def test_verify_checksum_valid(tmp_path):
-    import hashlib
 
     firmware = tmp_path / "firmware.bin"
     firmware.write_bytes(b"test firmware content")
@@ -147,3 +148,118 @@ def test_gh_repo_from_https_remote(monkeypatch):
     monkeypatch.setattr(subprocess, "run", fake_run)
 
     assert flash._gh_repo() == "user/project"
+
+
+class FakeResponse:
+    def __init__(self, data):
+        self._data = data
+    def read(self):
+        return self._data
+    def __enter__(self):
+        return self
+    def __exit__(self, *a):
+        pass
+
+
+def test_fetch_release_meta_latest(monkeypatch):
+    release_data = {"tag_name": "v1.0", "assets": []}
+
+    def fake_urlopen(req):
+        assert "/releases/latest" in req.full_url
+        return FakeResponse(json.dumps(release_data).encode())
+
+    monkeypatch.setattr(flash.urllib.request, "urlopen", fake_urlopen)
+
+    result = flash._fetch_release_meta("owner/repo")
+    assert result["tag_name"] == "v1.0"
+
+
+def test_fetch_release_meta_by_tag(monkeypatch):
+    release_data = {"tag_name": "v2.0", "assets": []}
+
+    def fake_urlopen(req):
+        assert "/releases/tags/v2.0" in req.full_url
+        return FakeResponse(json.dumps(release_data).encode())
+
+    monkeypatch.setattr(flash.urllib.request, "urlopen", fake_urlopen)
+
+    result = flash._fetch_release_meta("owner/repo", tag="v2.0")
+    assert result["tag_name"] == "v2.0"
+
+
+def test_fetch_release_meta_404(monkeypatch):
+    import urllib.error
+
+    def fake_urlopen(req):
+        raise urllib.error.HTTPError(req.full_url, 404, "Not Found", {}, None)
+
+    monkeypatch.setattr(flash.urllib.request, "urlopen", fake_urlopen)
+
+    assert flash._fetch_release_meta("owner/repo", tag="v99") is None
+
+
+def test_download_release_verifies_checksum(monkeypatch, tmp_path):
+    firmware_content = b"real firmware bytes"
+    sha = hashlib.sha256(firmware_content).hexdigest()
+    checksums_content = f"{sha}  {flash.RELEASE_ASSET}\n".encode()
+
+    release_data = {
+        "tag_name": "v1.0",
+        "assets": [
+            {"name": flash.RELEASE_ASSET, "browser_download_url": "https://example.com/fw.bin"},
+            {"name": flash.CHECKSUMS_ASSET, "browser_download_url": "https://example.com/sums.txt"},
+        ],
+    }
+
+    monkeypatch.setattr(flash, "FIRMWARE_DIR", str(tmp_path))
+    monkeypatch.setattr(flash, "_gh_repo", lambda: "owner/repo")
+    monkeypatch.setattr(flash, "_fetch_release_meta", lambda repo, tag=None: release_data)
+
+    download_calls = []
+
+    def fake_download(url, dest):
+        download_calls.append(url)
+        if url.endswith("fw.bin"):
+            Path(dest).write_bytes(firmware_content)
+        elif url.endswith("sums.txt"):
+            Path(dest).write_bytes(checksums_content)
+        return True
+
+    monkeypatch.setattr(flash, "_download_file", fake_download)
+
+    result = flash.download_release(tag="v1.0")
+    assert result == str(tmp_path / flash.RELEASE_ASSET)
+    assert len(download_calls) == 2
+    # Checksums file should be cleaned up
+    assert not (tmp_path / flash.CHECKSUMS_ASSET).exists()
+
+
+def test_download_release_rejects_bad_checksum(monkeypatch, tmp_path):
+    firmware_content = b"real firmware bytes"
+    checksums_content = f"{'0' * 64}  {flash.RELEASE_ASSET}\n".encode()
+
+    release_data = {
+        "tag_name": "v1.0",
+        "assets": [
+            {"name": flash.RELEASE_ASSET, "browser_download_url": "https://example.com/fw.bin"},
+            {"name": flash.CHECKSUMS_ASSET, "browser_download_url": "https://example.com/sums.txt"},
+        ],
+    }
+
+    monkeypatch.setattr(flash, "FIRMWARE_DIR", str(tmp_path))
+    monkeypatch.setattr(flash, "_gh_repo", lambda: "owner/repo")
+    monkeypatch.setattr(flash, "_fetch_release_meta", lambda repo, tag=None: release_data)
+
+    def fake_download(url, dest):
+        if url.endswith("fw.bin"):
+            Path(dest).write_bytes(firmware_content)
+        elif url.endswith("sums.txt"):
+            Path(dest).write_bytes(checksums_content)
+        return True
+
+    monkeypatch.setattr(flash, "_download_file", fake_download)
+
+    result = flash.download_release(tag="v1.0")
+    assert result is None
+    # Bad firmware should be deleted
+    assert not (tmp_path / flash.RELEASE_ASSET).exists()
