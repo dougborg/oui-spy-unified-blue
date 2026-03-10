@@ -1,4 +1,6 @@
 #include "ws_broadcast.h"
+#include "../modules/module.h"
+#include <ArduinoJson.h>
 #include <esp_timer.h>
 
 // ============================================================================
@@ -103,6 +105,18 @@ bool enqueue(const char* topic, const char* json) {
         return false;
 
     portENTER_CRITICAL_SAFE(&_mux);
+    // Skip ring buffer write if no clients are listening
+    bool anyClient = false;
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        if (_clientFds[i] >= 0) {
+            anyClient = true;
+            break;
+        }
+    }
+    if (!anyClient) {
+        portEXIT_CRITICAL_SAFE(&_mux);
+        return false;
+    }
     uint16_t head = _writeHead;
     _slots[head].len = (uint16_t)written;
     memcpy(_slots[head].payload, buf, written);
@@ -115,14 +129,6 @@ bool enqueue(const char* topic, const char* json) {
     return true;
 }
 
-bool enqueueDoc(const char* topic, JsonDocument& doc) {
-    char jsonBuf[SLOT_SIZE - 32]; // Leave room for wrapper
-    size_t len = serializeJson(doc, jsonBuf, sizeof(jsonBuf));
-    if (len == 0 || len >= sizeof(jsonBuf))
-        return false;
-    return enqueue(topic, jsonBuf);
-}
-
 int clientCount() {
     portENTER_CRITICAL_SAFE(&_mux);
     int count = 0;
@@ -132,6 +138,26 @@ int clientCount() {
     }
     portEXIT_CRITICAL_SAFE(&_mux);
     return count;
+}
+
+bool hasClients() {
+    return clientCount() > 0;
+}
+
+void pushModuleList(IModule** modules, int count) {
+    // Build JSON array with snprintf — no heap alloc (module count is bounded at 5)
+    char json[256];
+    int pos = 0;
+    json[pos++] = '[';
+    for (int i = 0; i < count; i++) {
+        if (i > 0)
+            json[pos++] = ',';
+        pos += snprintf(json + pos, sizeof(json) - pos, "{\"name\":\"%s\",\"enabled\":%s}",
+                        modules[i]->name(), boolStr(modules[i]->isEnabled()));
+    }
+    json[pos++] = ']';
+    json[pos] = '\0';
+    enqueue(topic::SYS_MODULES, json);
 }
 
 // ============================================================================
@@ -245,6 +271,13 @@ static void drainTimerCb(void* arg) {
 }
 
 static void drainWork(void* arg) {
+    // Snapshot client fds once (stable for the duration of this drain)
+    int fds[MAX_CLIENTS];
+    portENTER_CRITICAL_SAFE(&_mux);
+    for (int i = 0; i < MAX_CLIENTS; i++)
+        fds[i] = _clientFds[i];
+    portEXIT_CRITICAL_SAFE(&_mux);
+
     // Drain all pending slots and broadcast to clients
     while (true) {
         portENTER_CRITICAL_SAFE(&_mux);
@@ -258,13 +291,6 @@ static void drainWork(void* arg) {
         char payload[SLOT_SIZE];
         memcpy(payload, _slots[idx].payload, len);
         _readHead = (idx + 1) % SLOT_COUNT;
-        portEXIT_CRITICAL_SAFE(&_mux);
-
-        // Snapshot client fds under lock
-        int fds[MAX_CLIENTS];
-        portENTER_CRITICAL_SAFE(&_mux);
-        for (int i = 0; i < MAX_CLIENTS; i++)
-            fds[i] = _clientFds[i];
         portEXIT_CRITICAL_SAFE(&_mux);
 
         // Broadcast to all connected clients
@@ -288,6 +314,7 @@ static void drainWork(void* arg) {
                         _clientFds[j] = -1;
                 }
                 portEXIT_CRITICAL_SAFE(&_mux);
+                fds[i] = -1; // Don't retry this fd for remaining slots
             }
         }
     }
