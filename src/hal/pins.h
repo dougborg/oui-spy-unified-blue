@@ -11,3 +11,5 @@
 #define BOOT_BUTTON_PIN 0 // GPIO0 - BOOT button (active LOW)
 #define GPS_RX_PIN 44     // D7 - ESP32 RX <- GPS TX
 #define GPS_TX_PIN 43     // D6 - ESP32 TX -> GPS RX
+#define MESH_UART_TX_PIN 5 // D4 - Serial1 TX to Heltec LoRa gateway
+#define MESH_UART_RX_PIN 6 // D5 - Serial1 RX from Heltec LoRa gateway

@@ -263,13 +263,22 @@ void test_buzzer_logic_proximity_interval() {
 }
 
 void test_neopixel_logic_breathing_and_flash() {
-    auto up = hal::neopixel_logic::nextBreathing({0.99f, true});
-    TEST_ASSERT_FLOAT_WITHIN(0.001f, 1.0f, up.brightness);
-    TEST_ASSERT_FALSE(up.increasing);
+    // Sine-wave breathing: output must stay in 15–60 range
+    uint8_t v0 = hal::neopixel_logic::breathingValue(0);
+    TEST_ASSERT_GREATER_OR_EQUAL(15, v0);
+    TEST_ASSERT_LESS_OR_EQUAL(60, v0);
 
-    auto down = hal::neopixel_logic::nextBreathing({0.1f, false});
-    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.1f, down.brightness);
-    TEST_ASSERT_TRUE(down.increasing);
+    // At quarter cycle (375ms), should be near peak
+    uint8_t vPeak = hal::neopixel_logic::breathingValue(375);
+    TEST_ASSERT_GREATER_OR_EQUAL(50, vPeak);
+
+    // At three-quarter cycle (1125ms), should be near trough
+    uint8_t vTrough = hal::neopixel_logic::breathingValue(1125);
+    TEST_ASSERT_LESS_OR_EQUAL(25, vTrough);
+
+    // Verify periodicity: same value at 0 and 1500
+    uint8_t vWrap = hal::neopixel_logic::breathingValue(1500);
+    TEST_ASSERT_EQUAL_UINT8(v0, vWrap);
 
     auto frame = hal::neopixel_logic::computeFlashFrame(260, 200, 12);
     TEST_ASSERT_TRUE(frame.active);

@@ -67,7 +67,6 @@ class FlockyouModule : public IModule, public hal::BLEListener {
     FYDetection _det[FY_MAX_DETECTIONS] = {};
     int _detCount = 0;
     SemaphoreHandle_t _mutex = nullptr;
-    bool _triggered = false;
     bool _deviceInRange = false;
     unsigned long _lastDetTime = 0;
     unsigned long _lastHB = 0;

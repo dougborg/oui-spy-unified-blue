@@ -305,7 +305,6 @@ void FlockyouModule::loop() {
         }
         if (millis() - _lastDetTime >= 30000) {
             _deviceInRange = false;
-            _triggered = false;
             hal::notify(hal::NOTIFY_FY_IDLE);
         }
     }
@@ -400,7 +399,7 @@ void FlockyouModule::onBLEAdvertisement(const NimBLEAdvertisedDevice* dev) {
     if (!detected)
         return;
 
-    addDetection(addrStr.c_str(), devName.c_str(), rssi, method, isRaven, ravenFW);
+    int idx = addDetection(addrStr.c_str(), devName.c_str(), rssi, method, isRaven, ravenFW);
 
     // Serial JSON output
     char gpsBuf[80] = "";
@@ -421,8 +420,7 @@ void FlockyouModule::onBLEAdvertisement(const NimBLEAdvertisedDevice* dev) {
                       method, addrStr.c_str(), devName.c_str(), rssi, gpsBuf);
     }
 
-    if (!_triggered) {
-        _triggered = true;
+    if (idx >= 0 && _det[idx].count == 1) {
         hal::notify(hal::NOTIFY_FY_ALERT);
     }
     _deviceInRange = true;
@@ -502,7 +500,6 @@ void FlockyouModule::clearDetections() {
     if (_mutex && xSemaphoreTake(_mutex, pdMS_TO_TICKS(200)) == pdTRUE) {
         _detCount = 0;
         memset(_det, 0, sizeof(_det));
-        _triggered = false;
         _deviceInRange = false;
         xSemaphoreGive(_mutex);
     }
