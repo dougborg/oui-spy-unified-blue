@@ -2,7 +2,7 @@
 name = "oui-spy-unified-blue"
 version = "0.1.0"
 description = "ESP32-S3 unified multi-module firmware build tools"
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 
 [dependency-groups]
 dev = [
@@ -13,6 +13,7 @@ dev = [
     "platformio>=6.0",
     "esptool>=4.0",
     "pyserial>=3.5",
+    "questionary>=2.1.1",
 ]
 
 [tool.pytest.ini_options]

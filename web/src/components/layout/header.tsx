@@ -1,8 +1,11 @@
 import type { SystemStatus } from "../../api/client";
-import { usePoll } from "../../hooks/use-poll";
+import { useWsTopic } from "../../hooks/use-ws-topic";
+import { connected } from "../../store/ws-store";
+import { SYS_STATUS } from "../../store/ws-topics";
 
 export function Header() {
-  const { data, connectionLost } = usePoll<SystemStatus>("/api/status", 5000);
+  const { data } = useWsTopic<SystemStatus>(SYS_STATUS, "/api/status", 5000);
+  const isDisconnected = !connected.value && !data;
 
   const uptimeText = data
     ? (() => {
@@ -20,7 +23,7 @@ export function Header() {
     <header class="flex-shrink-0 border-b-2 border-border-bright bg-bg-primary px-3 py-2">
       <h1 class="text-center text-xl font-bold tracking-[3px] text-accent">OUI SPY</h1>
       <div class="mt-0.5 text-center text-[10px] text-text-secondary">
-        {connectionLost ? (
+        {isDisconnected ? (
           <span class="font-bold text-danger-bright">DISCONNECTED</span>
         ) : (
           sub || "UNIFIED FIRMWARE"

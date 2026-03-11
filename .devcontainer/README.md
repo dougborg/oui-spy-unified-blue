@@ -44,26 +44,50 @@ The Docker image includes:
 
 ## In-container commands
 
-Build and flash:
+Use `just` targets for all tasks — they wrap the underlying tools and ensure
+the correct environment:
 
 ```bash
-pio run                  # build firmware
-pio run -t upload        # flash (Linux USB only)
-pio device monitor       # serial monitor
-```
-
-Quality checks:
-
-```bash
+just build               # build firmware
+just upload              # flash (Linux USB only)
+just monitor             # serial monitor
+just flash               # flash via flash.py
 just lint                # pre-commit (formatting, linting)
 just test                # Python tests
-just test-cpp            # native C++ tests (53 tests)
+just test-cpp            # native C++ tests
 just coverage-cpp        # tests + coverage report (35% threshold)
 just analyze-cpp         # cppcheck static analysis
 just web-lint            # Biome linter on web source
-just web-test            # Vitest web tests (18 tests)
+just web-test            # Vitest web tests
+just web-typecheck       # TypeScript type checks
 just quality             # all of the above
 ```
+
+## Docker targets (recommended — no local env needed)
+
+The `docker-` targets are the easiest way to build and test without opening a
+devcontainer. They run inside the published devcontainer image so every
+contributor gets an identical toolchain — no "works on my machine" issues and no
+need to install PlatformIO, Node.js, or Python locally. Only Docker and `just`
+are required on the host.
+
+```bash
+just docker-setup        # first-time: install pio packages + web deps
+just docker-build        # build firmware
+just docker-build-all    # build web + firmware
+just docker-test         # Python tests
+just docker-test-cpp     # native C++ tests
+just docker-coverage-cpp # tests + coverage report
+just docker-lint         # pre-commit (formatting, linting)
+just docker-analyze-cpp  # cppcheck static analysis
+just docker-web-lint     # Biome linter
+just docker-web-test     # Vitest web tests
+just docker-web-typecheck # TypeScript type checks
+just docker-web-build    # build web dashboard
+just docker-quality      # all quality checks
+```
+
+Flash/upload/monitor are not available via Docker (they need host USB access).
 
 ## Recommended workflow by host OS
 
@@ -78,28 +102,24 @@ bash .devcontainer/select-profile.sh linux-usb
 Rebuild/reopen container, then build and flash inside:
 
 ```bash
-pio run
-pio run -t upload
-pio device monitor
+just build
+just upload
+just monitor
 ```
 
 ### macOS
 
-Use the default `devcontainer.json` for build/dev. USB passthrough can be limited depending on Docker Desktop setup.
+USB passthrough from containers can be limited depending on Docker Desktop setup. Use docker targets to build and flash from the host:
 
-Recommended path:
-
-- Build in container: `pio run`
-- Flash from host: `python scripts/flash.py` or host `pio run -t upload`
+- Build: `just docker-build`
+- Flash: `just flash`
 
 ### Windows (Docker Desktop + WSL2)
 
-Use the default `devcontainer.json` for build/dev.
+USB forwarding to WSL can vary by setup (`usbipd-win` + WSL attach). Use docker targets to build and flash from the host:
 
-For serial flashing, USB forwarding to WSL can vary by setup (`usbipd-win` + WSL attach). If serial isn't visible in-container, use host upload instead:
-
-- Build in container: `pio run`
-- Flash from host: `python scripts/flash.py` or host `pio run -t upload`
+- Build: `just docker-build`
+- Flash: `just flash`
 
 ## Quick reset to portable default
 

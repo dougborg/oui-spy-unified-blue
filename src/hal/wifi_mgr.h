@@ -6,7 +6,8 @@
 
 // ============================================================================
 // Unified WiFi Manager
-// WIFI_AP_STA mode: AP serves web dashboard, STA enables promiscuous for Sky Spy
+// Normal mode: WIFI_AP only (promiscuous breaks WPA2 auth)
+// Scan mode: STA-only reboot for WiFi promiscuous + channel lock
 // ============================================================================
 
 namespace hal {

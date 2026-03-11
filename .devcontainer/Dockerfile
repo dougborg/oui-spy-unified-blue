@@ -1,15 +1,18 @@
+FROM node:22-slim AS node
+
 FROM mcr.microsoft.com/devcontainers/base:ubuntu
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-ARG NODE_MAJOR=22
+# Node.js — copy pre-built binaries instead of curl|bash + NodeSource apt repo
+COPY --from=node /usr/local/bin/node /usr/local/bin/
+COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
+RUN ln -sf ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+    && ln -sf ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
+
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         python3 \
-        python3-pip \
-        python3-venv \
-        python3-setuptools \
-        python3-wheel \
         build-essential \
         git \
         curl \
@@ -18,8 +21,6 @@ RUN apt-get update \
         clang-format \
         cppcheck \
         just \
-    && curl -fsSL https://deb.nodesource.com/setup_${NODE_MAJOR}.x | bash - \
-    && apt-get install -y --no-install-recommends nodejs \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -29,19 +30,23 @@ COPY --from=ghcr.io/astral-sh/uv:0.9.29 /uv /uvx /home/vscode/.local/bin/
 
 ENV PATH="/home/vscode/.local/bin:${PATH}"
 
-# Install dev dependencies into a persistent venv via uv
+# --- Layer: Python dev deps + pre-commit hook envs ---
+# Invalidated by: pyproject.toml, uv.lock, .pre-commit-config.yaml
 COPY --chown=vscode:vscode pyproject.toml /tmp/pio-project/pyproject.toml
 COPY --chown=vscode:vscode uv.lock /tmp/pio-project/uv.lock
-COPY --chown=vscode:vscode platformio.ini /tmp/pio-project/platformio.ini
 COPY --chown=vscode:vscode .pre-commit-config.yaml /tmp/pio-project/.pre-commit-config.yaml
 
 ENV UV_PROJECT_ENVIRONMENT="/home/vscode/.venv"
 
-RUN cd /tmp/pio-project && uv sync
+RUN cd /tmp/pio-project \
+    && uv sync \
+    && git init && pre-commit install-hooks && rm -rf .git
 
 ENV PATH="/home/vscode/.venv/bin:${PATH}"
 
-RUN cd /tmp/pio-project && git init && pre-commit install-hooks && rm -rf .git
+# --- Layer: PlatformIO toolchain + libraries (~2.5 GB) ---
+# Invalidated by: platformio.ini only
+COPY --chown=vscode:vscode platformio.ini /tmp/pio-project/platformio.ini
 
 RUN pio pkg install -d /tmp/pio-project \
     && rm -rf /tmp/pio-project

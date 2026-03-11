@@ -7,6 +7,9 @@ import type {
 } from "../../api/client";
 import { postEmpty, postForm } from "../../api/client";
 import { usePoll } from "../../hooks/use-poll";
+import { useWsTopic } from "../../hooks/use-ws-topic";
+import { connected } from "../../store/ws-store";
+import { WD_STATUS } from "../../store/ws-topics";
 import { Button } from "../shared/button";
 import { Card } from "../shared/card";
 import { DeviceCard, Tag } from "../shared/device-card";
@@ -27,10 +30,24 @@ function formatSize(bytes: number): string {
 
 export function WardriverPage() {
   const { toast } = useToast();
-  const { data: status } = usePoll<WardriverStatus>("/api/wardriver/status", 2000);
-  const { data: recent } = usePoll<WardriverSighting[]>("/api/wardriver/recent", 3000);
-  const { data: filters } = usePoll<WardriverFilter[]>("/api/wardriver/filters", 10000);
-  const { data: devicesResp } = usePoll<DevicesResponse>("/api/wardriver/devices", 3000);
+
+  const { data: status } = useWsTopic<WardriverStatus>(WD_STATUS, "/api/wardriver/status", 2000);
+
+  const { data: recent } = usePoll<WardriverSighting[]>(
+    "/api/wardriver/recent",
+    3000,
+    !connected.value,
+  );
+  const { data: filters } = usePoll<WardriverFilter[]>(
+    "/api/wardriver/filters",
+    10000,
+    !connected.value,
+  );
+  const { data: devicesResp } = usePoll<DevicesResponse>(
+    "/api/wardriver/devices",
+    3000,
+    !connected.value,
+  );
 
   const [ouis, setOuis] = useState("");
   const [macs, setMacs] = useState("");

@@ -3,6 +3,7 @@
 #include "../hal/notify.h"
 #include "../hal/wifi_mgr.h"
 #include "../web/routes.h"
+#include "../web/ws_broadcast.h"
 #include "odid_wifi.h"
 #include "opendroneid.h"
 #include <freertos/FreeRTOS.h>
@@ -47,6 +48,22 @@ void SkySpyModule::sendJSON(const SSUavData* uav) {
                   "\"pilot_lat\":%.6f,\"pilot_long\":%.6f,\"basic_id\":\"%s\"}\n",
                   macStr, uav->rssi, uav->latD, uav->longD, uav->altitudeMsl, uav->baseLatD,
                   uav->baseLongD, uav->uavId);
+
+    // Copy fields needed for WS push (will be sent outside mutex by caller)
+    _pendingWsJson[0] = '\0';
+    snprintf(_pendingWsJson, sizeof(_pendingWsJson),
+             "{\"mac\":\"%s\",\"rssi\":%d,\"drone_lat\":%.6f,\"drone_long\":%.6f,"
+             "\"altitude\":%d,\"height\":%d,\"speed\":%d,\"heading\":%d,"
+             "\"pilot_lat\":%.6f,\"pilot_long\":%.6f,\"uav_id\":\"%s\",\"op_id\":\"%s\"}",
+             macStr, uav->rssi, uav->latD, uav->longD, uav->altitudeMsl, uav->heightAgl, uav->speed,
+             uav->heading, uav->baseLatD, uav->baseLongD, uav->uavId, uav->opId);
+}
+
+void SkySpyModule::flushPendingWs() {
+    if (_pendingWsJson[0] != '\0') {
+        ws::enqueue(ws::topic::SS_DRONE, _pendingWsJson);
+        _pendingWsJson[0] = '\0';
+    }
 }
 
 void SkySpyModule::extractFromODID(SSUavData* uav) {
@@ -145,6 +162,7 @@ void SkySpyModule::handleWiFiFrame(const uint8_t* payload, int length, int rssi)
                 sendJSON(stored);
             }
             xSemaphoreGive(_mutex);
+            flushPendingWs();
         }
     }
     // Beacon frames with vendor-specific ODID IEs
@@ -178,6 +196,7 @@ void SkySpyModule::handleWiFiFrame(const uint8_t* payload, int length, int rssi)
                         triggerDetection();
                         sendJSON(stored);
                         xSemaphoreGive(_mutex);
+                        flushPendingWs();
                     }
                 }
             }
@@ -208,10 +227,30 @@ void SkySpyModule::loop() {
 
     unsigned long now = millis();
 
-    // Status heartbeat every 60s
+    // Status heartbeat every 60s (serial) / 5s (WS)
     if (now - _lastStatus > 60000UL) {
         Serial.println("{\"module\":\"skyspy\",\"status\":\"scanning\"}");
         _lastStatus = now;
+    }
+
+    // Push ss/status over WS every 5s
+    static unsigned long lastWsPush = 0;
+    if (now - lastWsPush >= 5000) {
+        int droneCount = 0;
+        bool inRange = _deviceInRange;
+        if (_mutex && xSemaphoreTake(_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+            for (int i = 0; i < SS_MAX_UAVS; i++) {
+                if (_uavs[i].mac[0] != 0 && (now - _uavs[i].lastSeen) < 7000)
+                    droneCount++;
+            }
+            xSemaphoreGive(_mutex);
+        }
+        char json[96];
+        snprintf(json, sizeof(json),
+                 "{\"in_range\":%s,\"active_drones\":%d,\"wifi_scanning\":false}",
+                 ws::boolStr(inRange), droneCount);
+        ws::enqueue(ws::topic::SS_STATUS, json);
+        lastWsPush = now;
     }
 
     // Heartbeat pulse if drone in range
@@ -298,6 +337,7 @@ void SkySpyModule::onBLEAdvertisement(const NimBLEAdvertisedDevice* device) {
     triggerDetection();
     sendJSON(uav);
     xSemaphoreGive(_mutex);
+    flushPendingWs();
 }
 
 // ============================================================================

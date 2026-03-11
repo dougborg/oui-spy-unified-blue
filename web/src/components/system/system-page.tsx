@@ -2,6 +2,9 @@ import { useEffect, useState } from "preact/hooks";
 import type { APConfig, GPSData, Module, SystemStatus } from "../../api/client";
 import { postEmpty, postForm } from "../../api/client";
 import { usePoll } from "../../hooks/use-poll";
+import { useWsTopic } from "../../hooks/use-ws-topic";
+import { connected } from "../../store/ws-store";
+import { SYS_GPS, SYS_MODULES, SYS_STATUS } from "../../store/ws-topics";
 import { Button } from "../shared/button";
 import { Card } from "../shared/card";
 import { LoadingState } from "../shared/spinner";
@@ -12,14 +15,20 @@ import { Toggle } from "../shared/toggle";
 
 export function SystemPage() {
   const { toast } = useToast();
-  const { data: status, loading: statusLoading } = usePoll<SystemStatus>("/api/status", 5000);
+
+  const { data: status, loading: statusLoading } = useWsTopic<SystemStatus>(
+    SYS_STATUS,
+    "/api/status",
+    5000,
+  );
   const {
     data: modules,
     refresh: refreshMods,
     loading: modsLoading,
-  } = usePoll<Module[]>("/api/modules", 5000);
-  const { data: gps } = usePoll<GPSData>("/api/gps", 5000);
-  const { data: ap } = usePoll<APConfig>("/api/ap", 30000);
+  } = useWsTopic<Module[]>(SYS_MODULES, "/api/modules", 5000);
+  const { data: gps } = useWsTopic<GPSData>(SYS_GPS, "/api/gps", 5000);
+
+  const { data: ap } = usePoll<APConfig>("/api/ap", 30000, !connected.value);
 
   const [ssid, setSsid] = useState("");
   const [pass, setPass] = useState("");

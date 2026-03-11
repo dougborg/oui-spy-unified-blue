@@ -12,7 +12,9 @@ import { ToastProvider } from "./components/shared/toast";
 import { SkyspyPage } from "./components/skyspy/skyspy-page";
 import { SystemPage } from "./components/system/system-page";
 import { WardriverPage } from "./components/wardriver/wardriver-page";
-import { usePoll } from "./hooks/use-poll";
+import { useWsTopic } from "./hooks/use-ws-topic";
+import { connect } from "./store/ws-store";
+import { SYS_GPS } from "./store/ws-topics";
 
 const TABS = ["SYSTEM", "DETECT", "FOX", "FLOCK", "SKY", "DRIVE"] as const;
 
@@ -22,7 +24,7 @@ const TABS = ["SYSTEM", "DETECT", "FOX", "FLOCK", "SKY", "DRIVE"] as const;
  * regardless of which tab is active.
  */
 function usePhoneGPS() {
-  const { data: gps } = usePoll<GPSData>("/api/gps", 10000);
+  const { data: gps } = useWsTopic<GPSData>(SYS_GPS, "/api/gps", 10000);
   const geoWatchRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -51,6 +53,7 @@ function usePhoneGPS() {
 
 export function App() {
   const [activeTab, setActiveTab] = useState(0);
+  useEffect(() => connect(), []);
   usePhoneGPS();
 
   return (

@@ -1,6 +1,9 @@
 import type { Module, SkyspyDrone, SkyspyStatus } from "../../api/client";
 import { postEmpty } from "../../api/client";
 import { usePoll } from "../../hooks/use-poll";
+import { useWsTopic } from "../../hooks/use-ws-topic";
+import { connected } from "../../store/ws-store";
+import { SS_STATUS, SYS_MODULES } from "../../store/ws-topics";
 import { Button } from "../shared/button";
 import { Card } from "../shared/card";
 import { DeviceCard, Tag } from "../shared/device-card";
@@ -10,9 +13,15 @@ import { LoadingState } from "../shared/spinner";
 import { StatCard } from "../shared/stat-card";
 
 export function SkyspyPage() {
-  const { data: drones, loading } = usePoll<SkyspyDrone[]>("/api/skyspy/drones", 2000);
-  const { data: status } = usePoll<SkyspyStatus>("/api/skyspy/status", 2000);
-  const { data: modules } = usePoll<Module[]>("/api/modules", 10000);
+  const { data: drones, loading } = usePoll<SkyspyDrone[]>(
+    "/api/skyspy/drones",
+    2000,
+    !connected.value,
+  );
+
+  const { data: status } = useWsTopic<SkyspyStatus>(SS_STATUS, "/api/skyspy/status", 2000);
+
+  const { data: modules } = useWsTopic<Module[]>(SYS_MODULES, "/api/modules", 10000);
 
   const moduleEnabled = modules?.find((m) => m.name === "skyspy")?.enabled ?? true;
 

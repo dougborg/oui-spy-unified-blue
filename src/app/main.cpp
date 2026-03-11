@@ -40,6 +40,7 @@
 
 // Web
 #include "web/server.h"
+#include "web/ws_broadcast.h"
 
 // ============================================================================
 // Module Instances
@@ -267,9 +268,36 @@ static void loopNormalMode() {
     // Heartbeat (5s interval)
     static unsigned long lastHB = 0;
     if (millis() - lastHB > 5000) {
-        Serial.printf("[HEARTBEAT] uptime=%lums heap=%u clients=%d\n", millis(), ESP.getFreeHeap(),
-                      WiFi.softAPgetStationNum());
+        Serial.printf("[HEARTBEAT] uptime=%lums heap=%u clients=%d ws=%d\n", millis(),
+                      ESP.getFreeHeap(), WiFi.softAPgetStationNum(), ws::clientCount());
         Serial.flush();
+
+        // Push sys/status over WS (snprintf — no heap alloc)
+        {
+            char json[128];
+            snprintf(json, sizeof(json), "{\"uptime\":%lu,\"heap\":%u,\"psram\":%u,\"buzzer\":%s}",
+                     millis() / 1000, ESP.getFreeHeap(), ESP.getFreePsram(),
+                     ws::boolStr(hal::buzzerIsEnabled()));
+            ws::enqueue(ws::topic::SYS_STATUS, json);
+        }
+
+        // Push sys/gps over WS (snprintf — no heap alloc)
+        {
+            const hal::GPSData& g = hal::gpsGet();
+            char json[256];
+            snprintf(json, sizeof(json),
+                     "{\"valid\":%s,\"lat\":%.8f,\"lon\":%.8f,\"acc\":%.1f,"
+                     "\"hardware\":%s,\"hw_detected\":%s,\"hw_fix\":%s,"
+                     "\"sats\":%d,\"fresh\":%s}",
+                     ws::boolStr(g.valid), g.lat, g.lon, g.accuracy, ws::boolStr(g.isHardware),
+                     ws::boolStr(g.hwDetected), ws::boolStr(g.hwFix), g.satellites,
+                     ws::boolStr(hal::gpsIsFresh()));
+            ws::enqueue(ws::topic::SYS_GPS, json);
+        }
+
+        // Push sys/modules over WS
+        ws::pushModuleList(modules, MODULE_COUNT);
+
         lastHB = millis();
     }
 
