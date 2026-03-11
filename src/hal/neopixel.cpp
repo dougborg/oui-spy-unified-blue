@@ -19,8 +19,6 @@ static uint16_t _flashHues[3] = {240, 300, 270};
 
 // Breathing state
 static unsigned long _breatheLastUpdate = 0;
-static float _breatheBrightness = 0.0;
-static bool _breatheIncreasing = true;
 
 Adafruit_NeoPixel& neopixelStrip() {
     return _strip;
@@ -121,12 +119,8 @@ static void updateBreathing() {
         return;
     _breatheLastUpdate = millis();
 
-    neopixel_logic::BreathingState state{_breatheBrightness, _breatheIncreasing};
-    state = neopixel_logic::nextBreathing(state);
-    _breatheBrightness = state.brightness;
-    _breatheIncreasing = state.increasing;
-
-    uint32_t color = hsvToRgb(_idleHue, 255, (uint8_t)(NEOPIXEL_BRIGHTNESS * _breatheBrightness));
+    uint8_t val = neopixel_logic::breathingValue(millis());
+    uint32_t color = hsvToRgb(_idleHue, 255, val);
     _strip.setPixelColor(0, color);
     _strip.show();
 }

@@ -1,6 +1,7 @@
 #include "skyspy.h"
 #include "../hal/led.h"
 #include "../hal/notify.h"
+#include "../hal/pins.h"
 #include "../hal/wifi_mgr.h"
 #include "../web/routes.h"
 #include "../web/ws_broadcast.h"
@@ -63,6 +64,47 @@ void SkySpyModule::flushPendingWs() {
     if (_pendingWsJson[0] != '\0') {
         ws::enqueue(ws::topic::SS_DRONE, _pendingWsJson);
         _pendingWsJson[0] = '\0';
+    }
+}
+
+// Mesh output: non-blocking, deferred to loop().
+// Detection callbacks just snapshot the UAV data; loop() sends when throttle allows.
+
+static void meshWriteLine(const char* msg, int len) {
+    if (len > 0 && Serial1.availableForWrite() >= len + 2) // +2 for \r\n
+        Serial1.println(msg);
+}
+
+void SkySpyModule::sendPendingMesh() {
+    static constexpr unsigned long MESH_INTERVAL = 5000;
+    static constexpr int MAX_MESH_SIZE = 230;
+
+    if (!_meshPending)
+        return;
+    unsigned long now = millis();
+    if (now - _lastMeshSend < MESH_INTERVAL)
+        return;
+    _lastMeshSend = now;
+    _meshPending = false;
+
+    char macStr[18];
+    snprintf(macStr, sizeof(macStr), "%02x:%02x:%02x:%02x:%02x:%02x", _meshUav.mac[0],
+             _meshUav.mac[1], _meshUav.mac[2], _meshUav.mac[3], _meshUav.mac[4], _meshUav.mac[5]);
+
+    char msg[MAX_MESH_SIZE];
+    int len = snprintf(msg, sizeof(msg), "Drone: %s RSSI:%d", macStr, _meshUav.rssi);
+    if (len > 0 && len < MAX_MESH_SIZE && _meshUav.latD != 0.0 && _meshUav.longD != 0.0) {
+        len += snprintf(msg + len, sizeof(msg) - len, " https://maps.google.com/?q=%.6f,%.6f",
+                        _meshUav.latD, _meshUav.longD);
+    }
+    meshWriteLine(msg, len);
+
+    if (_meshUav.baseLatD != 0.0 && _meshUav.baseLongD != 0.0) {
+        char pilotMsg[MAX_MESH_SIZE];
+        int pilotLen =
+            snprintf(pilotMsg, sizeof(pilotMsg), "Pilot: https://maps.google.com/?q=%.6f,%.6f",
+                     _meshUav.baseLatD, _meshUav.baseLongD);
+        meshWriteLine(pilotMsg, pilotLen);
     }
 }
 
@@ -160,6 +202,8 @@ void SkySpyModule::handleWiFiFrame(const uint8_t* payload, int length, int rssi)
                 stored->flag = 1;
                 triggerDetection();
                 sendJSON(stored);
+                _meshUav = *stored;
+                _meshPending = true;
             }
             xSemaphoreGive(_mutex);
             flushPendingWs();
@@ -195,6 +239,8 @@ void SkySpyModule::handleWiFiFrame(const uint8_t* payload, int length, int rssi)
                         stored->flag = 1;
                         triggerDetection();
                         sendJSON(stored);
+                        _meshUav = *stored;
+                        _meshPending = true;
                         xSemaphoreGive(_mutex);
                         flushPendingWs();
                     }
@@ -214,6 +260,7 @@ void SkySpyModule::setup() {
     _pktQueue = xQueueCreate(SS_PKT_QUEUE_LEN, sizeof(SSQueuedPkt));
     memset(_uavs, 0, sizeof(_uavs));
     ssInstance = this;
+    Serial1.begin(115200, SERIAL_8N1, MESH_UART_RX_PIN, MESH_UART_TX_PIN);
     Serial.println("[SKYSPY] Module initialized (BLE active, WiFi scan via reboot)");
 }
 
@@ -224,6 +271,9 @@ void SkySpyModule::loop() {
     // Process any WiFi frames queued by the promiscuous callback
     // (queue is only populated in scan mode; no-op in normal mode)
     processWiFiQueue();
+
+    // Send pending mesh UART messages (deferred from detection callbacks)
+    sendPendingMesh();
 
     unsigned long now = millis();
 
@@ -336,6 +386,8 @@ void SkySpyModule::onBLEAdvertisement(const NimBLEAdvertisedDevice* device) {
     uav->flag = 1;
     triggerDetection();
     sendJSON(uav);
+    _meshUav = *uav;
+    _meshPending = true;
     xSemaphoreGive(_mutex);
     flushPendingWs();
 }

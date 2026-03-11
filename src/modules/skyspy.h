@@ -81,6 +81,12 @@ class SkySpyModule : public IModule, public hal::BLEListener {
     void flushPendingWs();
     void extractFromODID(SSUavData* uav);
     void triggerDetection();
+    void sendPendingMesh();
+
+    // Mesh output state (non-blocking, sent from loop)
+    unsigned long _lastMeshSend = 0;
+    bool _meshPending = false;
+    SSUavData _meshUav = {};
 };
 
 // Static WiFi promiscuous callback (cannot be a member function)
