@@ -1,9 +1,23 @@
 #include "buzzer.h"
 #include "../storage/nvs_store.h"
 #include "buzzer_logic.h"
+
+// On XIAO, LED_PIN (21) is separate from NEOPIXEL_PIN (4), so buzzer can
+// independently blink the LED during sound effects. On boards where the
+// neopixel fallback backend owns the only LED (HAS_LED && !HAS_NEOPIXEL),
+// buzzer must not drive LED_PIN directly to avoid pin conflicts.
+#if HAS_NEOPIXEL
 #include "led.h"
+#else
+namespace hal {
+inline void ledOn() {}
+inline void ledOff() {}
+} // namespace hal
+#endif
 
 namespace hal {
+
+#if HAS_BUZZER
 
 // ============================================================================
 // State machine for non-blocking sound playback
@@ -74,45 +88,27 @@ void buzzerStop() {
 
 // ============================================================================
 // Sound effect note sequences
-// Each returns true when complete.
 // ============================================================================
 
-// Pattern: array of {freq, duration_ms, gap_ms} steps
 struct Note {
     int freq;
     int dur;
     int gap;
 };
 
-// Zelda Secret Discovered: G5 B5 D6 G6(hold)
 static const Note zelda[] = {{784, 150, 20}, {988, 150, 20}, {1175, 150, 20}, {1568, 400, 0}};
-
-// Close Encounters: D5 E5 C5 C4 G4(hold)
 static const Note closeEnc[] = {
     {587, 120, 30}, {659, 120, 30}, {523, 120, 30}, {262, 120, 30}, {392, 200, 0}};
-
-// Three beeps at 2kHz
 static const Note threeBeeps[] = {{2000, 200, 50}, {2000, 200, 50}, {2000, 200, 0}};
-
-// Two beeps at 2kHz
 static const Note twoBeeps[] = {{2000, 200, 50}, {2000, 200, 0}};
-
-// Ascending beeps (ready signal)
 static const Note ascending[] = {{1900, 200, 100}, {2200, 200, 0}};
-
-// Foxhunter first detection: 3 same-tone beeps at 1kHz
 static const Note foxFirst[] = {{1000, 100, 50}, {1000, 100, 50}, {1000, 100, 0}};
-
-// Drone detection: 3 rapid 1kHz beeps
 static const Note droneDetect[] = {{1000, 150, 50}, {1000, 150, 50}, {1000, 150, 0}};
-
-// Drone heartbeat: double pulse
 static const Note droneHB[] = {{600, 100, 50}, {600, 100, 0}};
 
-// Generic note sequence player. Returns true when done.
 static bool playNotes(const Note* notes, int count) {
     unsigned long elapsed = millis() - _stepStart;
-    int noteIdx = _step / 2; // each note has tone phase + gap phase
+    int noteIdx = _step / 2;
     bool isTone = (_step % 2) == 0;
 
     if (noteIdx >= count)
@@ -138,7 +134,6 @@ static bool playNotes(const Note* notes, int count) {
                 return true;
         }
     } else {
-        // Gap phase
         if (elapsed >= (unsigned long)n.gap) {
             _step++;
             _stepStart = millis();
@@ -169,49 +164,48 @@ static bool playCrowCaw(int startFreq, int endFreq, int durationMs, int warbleHz
     return false;
 }
 
-// Crow call sequence state
 static int crowPhase = 0;
 
 static bool playCrowCall() {
     unsigned long elapsed = millis() - _stepStart;
     switch (crowPhase) {
-    case 0: // Caw 1
+    case 0:
         if (playCrowCaw(850, 380, 180, 40)) {
             crowPhase = 1;
             _stepStart = millis();
         }
         return false;
-    case 1: // gap
+    case 1:
         if (elapsed >= 100) {
             crowPhase = 2;
             _stepStart = millis();
         }
         return false;
-    case 2: // Caw 2
+    case 2:
         if (playCrowCaw(780, 350, 150, 50)) {
             crowPhase = 3;
             _stepStart = millis();
         }
         return false;
-    case 3: // gap
+    case 3:
         if (elapsed >= 100) {
             crowPhase = 4;
             _stepStart = millis();
         }
         return false;
-    case 4: // Caw 3
+    case 4:
         if (playCrowCaw(820, 280, 220, 60)) {
             crowPhase = 5;
             _stepStart = millis();
         }
         return false;
-    case 5: // gap
+    case 5:
         if (elapsed >= 80) {
             crowPhase = 6;
             _stepStart = millis();
         }
         return false;
-    case 6: // staccato kk-kk
+    case 6:
         if (elapsed < 25) {
             if (_enabled)
                 toneOn(600);
@@ -229,7 +223,6 @@ static bool playCrowCall() {
     return true;
 }
 
-// Crow alarm (detection): two rising chirps + one descending caw
 static int crowAlarmPhase = 0;
 
 static bool playCrowAlarm() {
@@ -267,7 +260,6 @@ static bool playCrowAlarm() {
     return true;
 }
 
-// Crow heartbeat
 static bool playCrowHeartbeat() {
     unsigned long elapsed = millis() - _stepStart;
     if (_step == 0) {
@@ -288,7 +280,7 @@ static bool playCrowHeartbeat() {
 }
 
 // ============================================================================
-// Foxhunter proximity RSSI -> beep interval mapping
+// Foxhunter proximity
 // ============================================================================
 
 static int calcProxInterval(int rssi) {
@@ -315,7 +307,6 @@ static void updateProximity() {
 
     unsigned long now = millis();
 
-    // Ultra close: solid tone
     if (_proxRSSI >= -25) {
         if (_enabled)
             toneOn(1000);
@@ -327,7 +318,7 @@ static void updateProximity() {
     int interval = calcProxInterval(_proxRSSI);
 
     if (_proxBeeping) {
-        if (now - _proxLastBeep >= 50) { // 50ms beep duration
+        if (now - _proxLastBeep >= 50) {
             toneOff();
             ledOff();
             _proxBeeping = false;
@@ -344,7 +335,7 @@ static void updateProximity() {
 }
 
 // ============================================================================
-// Play a sound effect (preempts lower priority)
+// Play / Update
 // ============================================================================
 
 void buzzerPlay(SoundEffect effect) {
@@ -373,7 +364,7 @@ void buzzerPlay(SoundEffect effect) {
     }
 
     if (pri < _currentPri && _current != SND_NONE)
-        return; // lower priority, skip
+        return;
 
     toneOff();
     ledOff();
@@ -386,12 +377,7 @@ void buzzerPlay(SoundEffect effect) {
     crowAlarmPhase = 0;
 }
 
-// ============================================================================
-// Main update (call every loop iteration)
-// ============================================================================
-
 void buzzerUpdate() {
-    // Proximity mode takes precedence if active and no higher-priority sound
     if (_proxEnabled && _current == SND_NONE) {
         updateProximity();
         return;
@@ -448,5 +434,27 @@ void buzzerUpdate() {
         _step = 0;
     }
 }
+
+#else // !HAS_BUZZER — all functions are no-ops
+
+static bool _enabled = false;
+
+void buzzerInit() {
+    _enabled = false;
+    Serial.println("[HAL] Buzzer: not available on this board");
+}
+bool buzzerIsEnabled() {
+    return false;
+}
+void buzzerSetEnabled(bool) {}
+bool buzzerIsPlaying() {
+    return false;
+}
+void buzzerStop() {}
+void buzzerPlay(SoundEffect) {}
+void buzzerUpdate() {}
+void buzzerSetProximity(bool, int) {}
+
+#endif // HAS_BUZZER
 
 } // namespace hal

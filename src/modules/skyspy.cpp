@@ -1,7 +1,7 @@
 #include "skyspy.h"
+#include "../hal/board.h"
 #include "../hal/led.h"
 #include "../hal/notify.h"
-#include "../hal/pins.h"
 #include "../hal/wifi_mgr.h"
 #include "../web/routes.h"
 #include "../web/ws_broadcast.h"
@@ -71,8 +71,13 @@ void SkySpyModule::flushPendingWs() {
 // Detection callbacks just snapshot the UAV data; loop() sends when throttle allows.
 
 static void meshWriteLine(const char* msg, int len) {
+#ifdef MESH_UART_TX_PIN
     if (len > 0 && Serial1.availableForWrite() >= len + 2) // +2 for \r\n
         Serial1.println(msg);
+#else
+    (void)msg;
+    (void)len;
+#endif
 }
 
 void SkySpyModule::sendPendingMesh() {
@@ -260,7 +265,9 @@ void SkySpyModule::setup() {
     _pktQueue = xQueueCreate(SS_PKT_QUEUE_LEN, sizeof(SSQueuedPkt));
     memset(_uavs, 0, sizeof(_uavs));
     ssInstance = this;
+#ifdef MESH_UART_TX_PIN
     Serial1.begin(115200, SERIAL_8N1, MESH_UART_RX_PIN, MESH_UART_TX_PIN);
+#endif
     Serial.println("[SKYSPY] Module initialized (BLE active, WiFi scan via reboot)");
 }
 
@@ -337,8 +344,7 @@ void SkySpyModule::onBLEAdvertisement(const NimBLEAdvertisedDevice* device) {
     if (svcData.size() < 25) // ODID single messages are 25 bytes
         return;
 
-    NimBLEAddress addr = device->getAddress();
-    const uint8_t* mac = addr.getVal();
+    const uint8_t* mac = device->getAddress().getVal();
     if (!_mutex || xSemaphoreTake(_mutex, pdMS_TO_TICKS(50)) != pdTRUE)
         return;
 

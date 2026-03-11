@@ -1,5 +1,4 @@
 #include "wifi_mgr.h"
-#include <dhcpserver/dhcpserver.h>
 #include <esp_netif.h>
 
 namespace hal {
@@ -35,7 +34,7 @@ void wifiInit(const String& ssid, const String& password) {
     IPAddress apIP = WiFi.softAPIP();
     esp_netif_t* netif = esp_netif_get_handle_from_ifkey("WIFI_AP_DEF");
     if (netif) {
-        dhcps_offer_t offer = OFFER_DNS;
+        uint8_t offer = 0x02; // DHCPS_OFFER_DNS
         esp_err_t err = esp_netif_dhcps_option(netif, ESP_NETIF_OP_SET,
                                                ESP_NETIF_DOMAIN_NAME_SERVER, &offer, sizeof(offer));
         if (err != ESP_OK)
