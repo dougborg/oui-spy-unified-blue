@@ -202,7 +202,8 @@ void SkySpyModule::handleWiFiFrame(const uint8_t* payload, int length, int rssi)
                 stored->flag = 1;
                 triggerDetection();
                 sendJSON(stored);
-                _meshUav = *stored; _meshPending = true;
+                _meshUav = *stored;
+                _meshPending = true;
             }
             xSemaphoreGive(_mutex);
             flushPendingWs();
@@ -238,7 +239,8 @@ void SkySpyModule::handleWiFiFrame(const uint8_t* payload, int length, int rssi)
                         stored->flag = 1;
                         triggerDetection();
                         sendJSON(stored);
-                        _meshUav = *stored; _meshPending = true;
+                        _meshUav = *stored;
+                        _meshPending = true;
                         xSemaphoreGive(_mutex);
                         flushPendingWs();
                     }
