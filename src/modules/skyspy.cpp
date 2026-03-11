@@ -55,8 +55,8 @@ void SkySpyModule::sendJSON(const SSUavData* uav) {
              "{\"mac\":\"%s\",\"rssi\":%d,\"drone_lat\":%.6f,\"drone_long\":%.6f,"
              "\"altitude\":%d,\"height\":%d,\"speed\":%d,\"heading\":%d,"
              "\"pilot_lat\":%.6f,\"pilot_long\":%.6f,\"uav_id\":\"%s\",\"op_id\":\"%s\"}",
-             macStr, uav->rssi, uav->latD, uav->longD, uav->altitudeMsl, uav->heightAgl,
-             uav->speed, uav->heading, uav->baseLatD, uav->baseLongD, uav->uavId, uav->opId);
+             macStr, uav->rssi, uav->latD, uav->longD, uav->altitudeMsl, uav->heightAgl, uav->speed,
+             uav->heading, uav->baseLatD, uav->baseLongD, uav->uavId, uav->opId);
 }
 
 void SkySpyModule::flushPendingWs() {

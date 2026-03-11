@@ -193,8 +193,8 @@ void WardriverModule::loop() {
         snprintf(json, sizeof(json),
                  "{\"active\":true,\"wifi\":%d,\"ble\":%d,\"unique\":%d,"
                  "\"gps_fresh\":%s,\"has_csv\":%s,\"csv_size\":%u}",
-                 _wifiCount, _bleCount, unique, ws::boolStr(gpsFresh),
-                 ws::boolStr(hasCsvFile()), (unsigned)csvFileSize());
+                 _wifiCount, _bleCount, unique, ws::boolStr(gpsFresh), ws::boolStr(hasCsvFile()),
+                 (unsigned)csvFileSize());
         ws::enqueue(ws::topic::WD_STATUS, json);
         lastWsPush = now;
     }

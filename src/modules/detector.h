@@ -82,10 +82,10 @@ class DetectorModule : public IModule, public hal::BLEListener {
     // Uses fixed-size char buffers so strlcpy inside critical section avoids heap ops
     portMUX_TYPE _matchMux = portMUX_INITIALIZER_UNLOCKED;
     volatile bool _newMatch = false;
-    char _matchMAC[18] = {};    // "XX:XX:XX:XX:XX:XX\0"
+    char _matchMAC[18] = {}; // "XX:XX:XX:XX:XX:XX\0"
     int _matchRSSI = 0;
     char _matchFilter[64] = {};
-    char _matchType[8] = {};    // "NEW", "RE-3s", "RE-30s"
+    char _matchType[8] = {}; // "NEW", "RE-3s", "RE-30s"
 
     // NVS auto-save timer
     unsigned long _lastSave = 0;
