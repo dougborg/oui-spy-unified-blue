@@ -76,9 +76,9 @@ class FlockyouModule : public IModule, public hal::BLEListener {
     int _lastSaveCount = 0;
     bool _fsReady = false;
 
-    // Detection helpers
+    // Detection helpers. Sets *isNew = true if this is a first sighting.
     int addDetection(const char* mac, const char* name, int rssi, const char* method,
-                     bool isRaven = false, const char* ravenFW = "");
+                     bool isRaven = false, const char* ravenFW = "", bool* isNew = nullptr);
     void attachGPS(FYDetection& d);
 
     // Session persistence

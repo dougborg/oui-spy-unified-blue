@@ -105,7 +105,9 @@ void FlockyouModule::attachGPS(FYDetection& d) {
 }
 
 int FlockyouModule::addDetection(const char* mac, const char* detName, int rssi, const char* method,
-                                 bool isRaven, const char* ravenFW) {
+                                 bool isRaven, const char* ravenFW, bool* isNew) {
+    if (isNew)
+        *isNew = false;
     if (!_mutex || xSemaphoreTake(_mutex, pdMS_TO_TICKS(100)) != pdTRUE)
         return -1;
 
@@ -140,6 +142,8 @@ int FlockyouModule::addDetection(const char* mac, const char* detName, int rssi,
         d.isRaven = isRaven;
         strncpy(d.ravenFW, ravenFW ? ravenFW : "", sizeof(d.ravenFW) - 1);
         attachGPS(d);
+        if (isNew)
+            *isNew = true;
         // Copy name out before releasing mutex (d.name was sanitized above)
         char safeName[sizeof(d.name)];
         strlcpy(safeName, d.name, sizeof(safeName));
@@ -399,7 +403,8 @@ void FlockyouModule::onBLEAdvertisement(const NimBLEAdvertisedDevice* dev) {
     if (!detected)
         return;
 
-    int idx = addDetection(addrStr.c_str(), devName.c_str(), rssi, method, isRaven, ravenFW);
+    bool newDevice = false;
+    addDetection(addrStr.c_str(), devName.c_str(), rssi, method, isRaven, ravenFW, &newDevice);
 
     // Serial JSON output
     char gpsBuf[80] = "";
@@ -420,7 +425,7 @@ void FlockyouModule::onBLEAdvertisement(const NimBLEAdvertisedDevice* dev) {
                       method, addrStr.c_str(), devName.c_str(), rssi, gpsBuf);
     }
 
-    if (idx >= 0 && _det[idx].count == 1) {
+    if (newDevice) {
         hal::notify(hal::NOTIFY_FY_ALERT);
     }
     _deviceInRange = true;

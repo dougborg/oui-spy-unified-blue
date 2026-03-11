@@ -67,38 +67,44 @@ void SkySpyModule::flushPendingWs() {
     }
 }
 
-void SkySpyModule::sendMeshMessage(const SSUavData* uav) {
+// Mesh output: non-blocking, deferred to loop().
+// Detection callbacks just snapshot the UAV data; loop() sends when throttle allows.
+
+static void meshWriteLine(const char* msg, int len) {
+    if (len > 0 && Serial1.availableForWrite() >= len + 2) // +2 for \r\n
+        Serial1.println(msg);
+}
+
+void SkySpyModule::sendPendingMesh() {
     static constexpr unsigned long MESH_INTERVAL = 5000;
     static constexpr int MAX_MESH_SIZE = 230;
 
+    if (!_meshPending)
+        return;
     unsigned long now = millis();
     if (now - _lastMeshSend < MESH_INTERVAL)
         return;
     _lastMeshSend = now;
+    _meshPending = false;
 
     char macStr[18];
-    snprintf(macStr, sizeof(macStr), "%02x:%02x:%02x:%02x:%02x:%02x", uav->mac[0], uav->mac[1],
-             uav->mac[2], uav->mac[3], uav->mac[4], uav->mac[5]);
+    snprintf(macStr, sizeof(macStr), "%02x:%02x:%02x:%02x:%02x:%02x", _meshUav.mac[0],
+             _meshUav.mac[1], _meshUav.mac[2], _meshUav.mac[3], _meshUav.mac[4], _meshUav.mac[5]);
 
     char msg[MAX_MESH_SIZE];
-    int len = snprintf(msg, sizeof(msg), "Drone: %s RSSI:%d", macStr, uav->rssi);
-    if (len < MAX_MESH_SIZE && uav->latD != 0.0 && uav->longD != 0.0) {
+    int len = snprintf(msg, sizeof(msg), "Drone: %s RSSI:%d", macStr, _meshUav.rssi);
+    if (len > 0 && len < MAX_MESH_SIZE && _meshUav.latD != 0.0 && _meshUav.longD != 0.0) {
         len += snprintf(msg + len, sizeof(msg) - len, " https://maps.google.com/?q=%.6f,%.6f",
-                        uav->latD, uav->longD);
+                        _meshUav.latD, _meshUav.longD);
     }
-    if (Serial1.availableForWrite() >= len) {
-        Serial1.println(msg);
-    }
+    meshWriteLine(msg, len);
 
-    vTaskDelay(pdMS_TO_TICKS(1000));
-    if (uav->baseLatD != 0.0 && uav->baseLongD != 0.0) {
+    if (_meshUav.baseLatD != 0.0 && _meshUav.baseLongD != 0.0) {
         char pilotMsg[MAX_MESH_SIZE];
-        int pilotLen = snprintf(pilotMsg, sizeof(pilotMsg),
-                                "Pilot: https://maps.google.com/?q=%.6f,%.6f", uav->baseLatD,
-                                uav->baseLongD);
-        if (Serial1.availableForWrite() >= pilotLen) {
-            Serial1.println(pilotMsg);
-        }
+        int pilotLen =
+            snprintf(pilotMsg, sizeof(pilotMsg), "Pilot: https://maps.google.com/?q=%.6f,%.6f",
+                     _meshUav.baseLatD, _meshUav.baseLongD);
+        meshWriteLine(pilotMsg, pilotLen);
     }
 }
 
@@ -196,7 +202,7 @@ void SkySpyModule::handleWiFiFrame(const uint8_t* payload, int length, int rssi)
                 stored->flag = 1;
                 triggerDetection();
                 sendJSON(stored);
-                sendMeshMessage(stored);
+                _meshUav = *stored; _meshPending = true;
             }
             xSemaphoreGive(_mutex);
             flushPendingWs();
@@ -232,7 +238,7 @@ void SkySpyModule::handleWiFiFrame(const uint8_t* payload, int length, int rssi)
                         stored->flag = 1;
                         triggerDetection();
                         sendJSON(stored);
-                        sendMeshMessage(stored);
+                        _meshUav = *stored; _meshPending = true;
                         xSemaphoreGive(_mutex);
                         flushPendingWs();
                     }
@@ -263,6 +269,9 @@ void SkySpyModule::loop() {
     // Process any WiFi frames queued by the promiscuous callback
     // (queue is only populated in scan mode; no-op in normal mode)
     processWiFiQueue();
+
+    // Send pending mesh UART messages (deferred from detection callbacks)
+    sendPendingMesh();
 
     unsigned long now = millis();
 
@@ -375,7 +384,8 @@ void SkySpyModule::onBLEAdvertisement(const NimBLEAdvertisedDevice* device) {
     uav->flag = 1;
     triggerDetection();
     sendJSON(uav);
-    sendMeshMessage(uav);
+    _meshUav = *uav;
+    _meshPending = true;
     xSemaphoreGive(_mutex);
     flushPendingWs();
 }
