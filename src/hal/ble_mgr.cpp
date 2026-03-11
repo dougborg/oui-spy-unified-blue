@@ -33,7 +33,7 @@ void bleInit() {
     _scan->setScanCallbacks(&_callbacks, false);
     _scan->setActiveScan(false);      // Passive — saves radio time for WiFi coexistence
     _scan->setDuplicateFilter(false); // See every advertisement
-    _scan->setMaxResults(0); // Don't store results — we only use the onResult callback
+    _scan->setMaxResults(0);          // Don't store results — we only use the onResult callback
 
     // Default scan params — ~70% BLE duty cycle
     // NimBLE 2.x takes milliseconds directly

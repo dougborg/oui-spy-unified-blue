@@ -170,30 +170,50 @@ static bool playCrowCall() {
     unsigned long elapsed = millis() - _stepStart;
     switch (crowPhase) {
     case 0:
-        if (playCrowCaw(850, 380, 180, 40)) { crowPhase = 1; _stepStart = millis(); }
+        if (playCrowCaw(850, 380, 180, 40)) {
+            crowPhase = 1;
+            _stepStart = millis();
+        }
         return false;
     case 1:
-        if (elapsed >= 100) { crowPhase = 2; _stepStart = millis(); }
+        if (elapsed >= 100) {
+            crowPhase = 2;
+            _stepStart = millis();
+        }
         return false;
     case 2:
-        if (playCrowCaw(780, 350, 150, 50)) { crowPhase = 3; _stepStart = millis(); }
+        if (playCrowCaw(780, 350, 150, 50)) {
+            crowPhase = 3;
+            _stepStart = millis();
+        }
         return false;
     case 3:
-        if (elapsed >= 100) { crowPhase = 4; _stepStart = millis(); }
+        if (elapsed >= 100) {
+            crowPhase = 4;
+            _stepStart = millis();
+        }
         return false;
     case 4:
-        if (playCrowCaw(820, 280, 220, 60)) { crowPhase = 5; _stepStart = millis(); }
+        if (playCrowCaw(820, 280, 220, 60)) {
+            crowPhase = 5;
+            _stepStart = millis();
+        }
         return false;
     case 5:
-        if (elapsed >= 80) { crowPhase = 6; _stepStart = millis(); }
+        if (elapsed >= 80) {
+            crowPhase = 6;
+            _stepStart = millis();
+        }
         return false;
     case 6:
         if (elapsed < 25) {
-            if (_enabled) toneOn(600);
+            if (_enabled)
+                toneOn(600);
         } else if (elapsed < 65) {
             toneOff();
         } else if (elapsed < 90) {
-            if (_enabled) toneOn(550);
+            if (_enabled)
+                toneOn(550);
         } else {
             toneOff();
             return true;
@@ -209,16 +229,28 @@ static bool playCrowAlarm() {
     unsigned long elapsed = millis() - _stepStart;
     switch (crowAlarmPhase) {
     case 0:
-        if (playCrowCaw(400, 900, 100, 30)) { crowAlarmPhase = 1; _stepStart = millis(); }
+        if (playCrowCaw(400, 900, 100, 30)) {
+            crowAlarmPhase = 1;
+            _stepStart = millis();
+        }
         return false;
     case 1:
-        if (elapsed >= 60) { crowAlarmPhase = 2; _stepStart = millis(); }
+        if (elapsed >= 60) {
+            crowAlarmPhase = 2;
+            _stepStart = millis();
+        }
         return false;
     case 2:
-        if (playCrowCaw(450, 950, 100, 30)) { crowAlarmPhase = 3; _stepStart = millis(); }
+        if (playCrowCaw(450, 950, 100, 30)) {
+            crowAlarmPhase = 3;
+            _stepStart = millis();
+        }
         return false;
     case 3:
-        if (elapsed >= 60) { crowAlarmPhase = 4; _stepStart = millis(); }
+        if (elapsed >= 60) {
+            crowAlarmPhase = 4;
+            _stepStart = millis();
+        }
         return false;
     case 4:
         if (playCrowCaw(900, 350, 200, 50))
@@ -231,10 +263,16 @@ static bool playCrowAlarm() {
 static bool playCrowHeartbeat() {
     unsigned long elapsed = millis() - _stepStart;
     if (_step == 0) {
-        if (playCrowCaw(500, 400, 80, 20)) { _step = 1; _stepStart = millis(); }
+        if (playCrowCaw(500, 400, 80, 20)) {
+            _step = 1;
+            _stepStart = millis();
+        }
         return false;
     } else if (_step == 1) {
-        if (elapsed >= 120) { _step = 2; _stepStart = millis(); }
+        if (elapsed >= 120) {
+            _step = 2;
+            _stepStart = millis();
+        }
         return false;
     } else {
         return playCrowCaw(480, 380, 80, 20);
@@ -270,7 +308,8 @@ static void updateProximity() {
     unsigned long now = millis();
 
     if (_proxRSSI >= -25) {
-        if (_enabled) toneOn(1000);
+        if (_enabled)
+            toneOn(1000);
         ledOn();
         _proxBeeping = true;
         return;
@@ -286,7 +325,8 @@ static void updateProximity() {
         }
     } else {
         if (now - _proxLastBeep >= (unsigned long)interval) {
-            if (_enabled) toneOn(1000);
+            if (_enabled)
+                toneOn(1000);
             ledOn();
             _proxBeeping = true;
             _proxLastBeep = now;
@@ -348,18 +388,42 @@ void buzzerUpdate() {
 
     bool done = false;
     switch (_current) {
-    case SND_ZELDA_SECRET: done = playNotes(zelda, 4); break;
-    case SND_CLOSE_ENCOUNTERS: done = playNotes(closeEnc, 5); break;
-    case SND_THREE_BEEPS: done = playNotes(threeBeeps, 3); break;
-    case SND_TWO_BEEPS: done = playNotes(twoBeeps, 2); break;
-    case SND_ASCENDING: done = playNotes(ascending, 2); break;
-    case SND_FOX_FIRST: done = playNotes(foxFirst, 3); break;
-    case SND_DRONE_DETECT: done = playNotes(droneDetect, 3); break;
-    case SND_DRONE_HEARTBEAT: done = playNotes(droneHB, 2); break;
-    case SND_CROW_CALL: done = playCrowCall(); break;
-    case SND_CROW_ALARM: done = playCrowAlarm(); break;
-    case SND_CROW_HEARTBEAT: done = playCrowHeartbeat(); break;
-    default: done = true; break;
+    case SND_ZELDA_SECRET:
+        done = playNotes(zelda, 4);
+        break;
+    case SND_CLOSE_ENCOUNTERS:
+        done = playNotes(closeEnc, 5);
+        break;
+    case SND_THREE_BEEPS:
+        done = playNotes(threeBeeps, 3);
+        break;
+    case SND_TWO_BEEPS:
+        done = playNotes(twoBeeps, 2);
+        break;
+    case SND_ASCENDING:
+        done = playNotes(ascending, 2);
+        break;
+    case SND_FOX_FIRST:
+        done = playNotes(foxFirst, 3);
+        break;
+    case SND_DRONE_DETECT:
+        done = playNotes(droneDetect, 3);
+        break;
+    case SND_DRONE_HEARTBEAT:
+        done = playNotes(droneHB, 2);
+        break;
+    case SND_CROW_CALL:
+        done = playCrowCall();
+        break;
+    case SND_CROW_ALARM:
+        done = playCrowAlarm();
+        break;
+    case SND_CROW_HEARTBEAT:
+        done = playCrowHeartbeat();
+        break;
+    default:
+        done = true;
+        break;
     }
 
     if (done) {
@@ -379,9 +443,13 @@ void buzzerInit() {
     _enabled = false;
     Serial.println("[HAL] Buzzer: not available on this board");
 }
-bool buzzerIsEnabled() { return false; }
+bool buzzerIsEnabled() {
+    return false;
+}
 void buzzerSetEnabled(bool) {}
-bool buzzerIsPlaying() { return false; }
+bool buzzerIsPlaying() {
+    return false;
+}
 void buzzerStop() {}
 void buzzerPlay(SoundEffect) {}
 void buzzerUpdate() {}

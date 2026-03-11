@@ -4,7 +4,6 @@
 #include "module.h"
 #include "opendroneid.h"
 #include <cstdint>
-#include <esp_wifi_types.h>
 #include <esp_http_server.h>
 #include <esp_wifi_types.h>
 #include <freertos/FreeRTOS.h>

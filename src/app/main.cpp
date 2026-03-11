@@ -16,6 +16,7 @@
 
 // HAL
 #include "hal/ble_mgr.h"
+#include "hal/board.h"
 #include "hal/buzzer.h"
 #include "hal/dns_server.h"
 #include "hal/gps.h"
@@ -24,7 +25,6 @@
 #include "hal/mdns_setup.h"
 #include "hal/neopixel.h"
 #include "hal/notify.h"
-#include "hal/board.h"
 #include "hal/wifi_mgr.h"
 
 // Modules

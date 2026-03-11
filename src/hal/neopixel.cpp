@@ -55,12 +55,36 @@ uint32_t hsvToRgb(uint16_t h, uint8_t s, uint8_t v) {
         uint8_t q = (v * (255 - ((s * remainder) >> 8))) >> 8;
         uint8_t t = (v * (255 - ((s * (255 - remainder)) >> 8))) >> 8;
         switch (region) {
-        case 0: r = v; g = t; b = p; break;
-        case 1: r = q; g = v; b = p; break;
-        case 2: r = p; g = v; b = t; break;
-        case 3: r = p; g = q; b = v; break;
-        case 4: r = t; g = p; b = v; break;
-        default: r = v; g = p; b = q; break;
+        case 0:
+            r = v;
+            g = t;
+            b = p;
+            break;
+        case 1:
+            r = q;
+            g = v;
+            b = p;
+            break;
+        case 2:
+            r = p;
+            g = v;
+            b = t;
+            break;
+        case 3:
+            r = p;
+            g = q;
+            b = v;
+            break;
+        case 4:
+            r = t;
+            g = p;
+            b = v;
+            break;
+        default:
+            r = v;
+            g = p;
+            b = q;
+            break;
         }
     }
 #if HAS_NEOPIXEL || HAS_APA102
@@ -77,9 +101,13 @@ uint32_t hsvToRgb(uint16_t h, uint8_t s, uint8_t v) {
 #if HAS_NEOPIXEL || HAS_APA102
 
 #if HAS_NEOPIXEL
-Adafruit_NeoPixel& neopixelStrip() { return _strip; }
+Adafruit_NeoPixel& neopixelStrip() {
+    return _strip;
+}
 #else
-Adafruit_DotStar& neopixelStrip() { return _strip; }
+Adafruit_DotStar& neopixelStrip() {
+    return _strip;
+}
 #endif
 
 void neopixelInit() {
@@ -101,15 +129,12 @@ void neopixelOff() {
 }
 
 static void updateBreathing() {
-    if (millis() - _breatheLastUpdate < 20) return;
+    if (millis() - _breatheLastUpdate < 20)
+        return;
     _breatheLastUpdate = millis();
 
-    neopixel_logic::BreathingState state{_breatheBrightness, _breatheIncreasing};
-    state = neopixel_logic::nextBreathing(state);
-    _breatheBrightness = state.brightness;
-    _breatheIncreasing = state.increasing;
-
-    uint32_t color = hsvToRgb(_idleHue, 255, (uint8_t)(NEOPIXEL_BRIGHTNESS * _breatheBrightness));
+    uint8_t val = neopixel_logic::breathingValue(millis());
+    uint32_t color = hsvToRgb(_idleHue, 255, val);
     STRIP.setPixelColor(0, color);
     STRIP.show();
 }
@@ -132,15 +157,22 @@ static void updateHeartbeat() {
 }
 
 static void updateScanModeCycle() {
-    if (millis() - _scanLastUpdate < 25) return;
+    if (millis() - _scanLastUpdate < 25)
+        return;
     _scanLastUpdate = millis();
 
     if (_scanIncreasing) {
         _scanBrightness += 0.02f;
-        if (_scanBrightness >= 1.0f) { _scanBrightness = 1.0f; _scanIncreasing = false; }
+        if (_scanBrightness >= 1.0f) {
+            _scanBrightness = 1.0f;
+            _scanIncreasing = false;
+        }
     } else {
         _scanBrightness -= 0.02f;
-        if (_scanBrightness <= 0.15f) { _scanBrightness = 0.15f; _scanIncreasing = true; }
+        if (_scanBrightness <= 0.15f) {
+            _scanBrightness = 0.15f;
+            _scanIncreasing = true;
+        }
     }
 
     uint16_t hue = 180 + (uint16_t)(60.0f * _scanBrightness);
@@ -189,34 +221,56 @@ void neopixelInit() {
 }
 
 void neopixelSetColor(uint8_t r, uint8_t g, uint8_t b) {
-    if (r > 0 || g > 0 || b > 0) plainLedOn(); else plainLedOff();
+    if (r > 0 || g > 0 || b > 0)
+        plainLedOn();
+    else
+        plainLedOff();
 }
 
-void neopixelOff() { plainLedOff(); }
+void neopixelOff() {
+    plainLedOff();
+}
 
 static unsigned long _ledBlinkLast = 0;
 static bool _ledBlinkState = false;
 
 static void updateBreathing() {
-    if (millis() - _ledBlinkLast < 1000) return;
+    if (millis() - _ledBlinkLast < 1000)
+        return;
     _ledBlinkLast = millis();
     _ledBlinkState = !_ledBlinkState;
-    if (_ledBlinkState) plainLedOn(); else plainLedOff();
+    if (_ledBlinkState)
+        plainLedOn();
+    else
+        plainLedOff();
 }
 
 static void updateFlash() {
     unsigned long elapsed = millis() - _flashStart;
-    if (elapsed > 750) { _flashing = false; plainLedOff(); return; }
-    if ((elapsed / 100) % 2 == 0) plainLedOn(); else plainLedOff();
+    if (elapsed > 750) {
+        _flashing = false;
+        plainLedOff();
+        return;
+    }
+    if ((elapsed / 100) % 2 == 0)
+        plainLedOn();
+    else
+        plainLedOff();
 }
 
-static void updateHeartbeat() { plainLedOn(); }
+static void updateHeartbeat() {
+    plainLedOn();
+}
 
 static void updateScanModeCycle() {
-    if (millis() - _scanLastUpdate < 250) return;
+    if (millis() - _scanLastUpdate < 250)
+        return;
     _scanLastUpdate = millis();
     _scanBrightness = _scanBrightness > 0.5f ? 0.0f : 1.0f;
-    if (_scanBrightness > 0.5f) plainLedOn(); else plainLedOff();
+    if (_scanBrightness > 0.5f)
+        plainLedOn();
+    else
+        plainLedOff();
 }
 
 // ============================================================================
@@ -231,7 +285,9 @@ void neopixelInit() {
 void neopixelSetColor(uint8_t, uint8_t, uint8_t) {}
 void neopixelOff() {}
 static void updateBreathing() {}
-static void updateFlash() { _flashing = false; }
+static void updateFlash() {
+    _flashing = false;
+}
 static void updateHeartbeat() {}
 static void updateScanModeCycle() {}
 
@@ -241,11 +297,14 @@ static void updateScanModeCycle() {}
 // Common functions (all backends)
 // ============================================================================
 
-void neopixelSetIdleHue(uint16_t hue) { _idleHue = hue; }
+void neopixelSetIdleHue(uint16_t hue) {
+    _idleHue = hue;
+}
 
 void neopixelSetState(NeoPixelState state, uint16_t hue) {
     _state = state;
-    if (state == NEO_HEARTBEAT_GLOW) _heartbeatHue = hue;
+    if (state == NEO_HEARTBEAT_GLOW)
+        _heartbeatHue = hue;
 }
 
 void neopixelFlash(uint16_t hue1, uint16_t hue2, uint16_t hue3) {
@@ -256,91 +315,30 @@ void neopixelFlash(uint16_t hue1, uint16_t hue2, uint16_t hue3) {
     _flashHues[2] = hue3;
 }
 
-<<<<<<< HEAD
 void neopixelStartScanAnimation() {
     _state = NEO_SCAN_MODE_CYCLE;
 }
 
-void neopixelSetColor(uint8_t r, uint8_t g, uint8_t b) {
-    _strip.setPixelColor(0, _strip.Color(r, g, b));
-    _strip.show();
-}
-
-void neopixelOff() {
-    _strip.clear();
-    _strip.show();
-}
-
-// Breathing animation
-static void updateBreathing() {
-    if (millis() - _breatheLastUpdate < 20)
-        return;
-    _breatheLastUpdate = millis();
-
-    uint8_t val = neopixel_logic::breathingValue(millis());
-    uint32_t color = hsvToRgb(_idleHue, 255, val);
-    _strip.setPixelColor(0, color);
-    _strip.show();
-}
-
-// Detection flash animation
-static void updateFlash() {
-    unsigned long elapsed = millis() - _flashStart;
-    auto frame = neopixel_logic::computeFlashFrame(elapsed, NEOPIXEL_DETECTION_BRIGHTNESS,
-                                                   (NEOPIXEL_BRIGHTNESS / 4));
-    if (!frame.active) {
-        _flashing = false;
-        return;
-    }
-    _strip.setPixelColor(0, hsvToRgb(_flashHues[frame.frameIndex], 255, frame.value));
-    _strip.show();
-}
-
-// Heartbeat glow
-static void updateHeartbeat() {
-    _strip.setPixelColor(0, hsvToRgb(_heartbeatHue, 255, 30));
-    _strip.show();
-}
-
-// Scan mode: smooth blue↔cyan breathing
-static unsigned long _scanLastUpdate = 0;
-
-static void updateScanModeCycle() {
-    if (millis() - _scanLastUpdate < 25)
-        return;
-    _scanLastUpdate = millis();
-
-    // Breathing envelope
-    if (_scanIncreasing) {
-        _scanBrightness += 0.02f;
-        if (_scanBrightness >= 1.0f) {
-            _scanBrightness = 1.0f;
-            _scanIncreasing = false;
-        }
-    } else {
-        _scanBrightness -= 0.02f;
-        if (_scanBrightness <= 0.15f) {
-            _scanBrightness = 0.15f;
-            _scanIncreasing = true;
-        }
-    }
-
-    // Hue oscillates between blue (240) and cyan (180)
-    uint16_t hue = 180 + (uint16_t)(60.0f * _scanBrightness);
-    uint8_t val = (uint8_t)(NEOPIXEL_BRIGHTNESS * _scanBrightness);
-    _strip.setPixelColor(0, hsvToRgb(hue, 255, val));
-    _strip.show();
-}
-
 void neopixelUpdate() {
-    if (_flashing) { updateFlash(); return; }
+    if (_flashing) {
+        updateFlash();
+        return;
+    }
 
     switch (_state) {
-    case NEO_SCAN_MODE_CYCLE: updateScanModeCycle(); break;
-    case NEO_DETECTION_FLASH: updateFlash(); break;
-    case NEO_HEARTBEAT_GLOW: updateHeartbeat(); break;
+    case NEO_SCAN_MODE_CYCLE:
+        updateScanModeCycle();
+        break;
+    case NEO_DETECTION_FLASH:
+        updateFlash();
+        break;
+    case NEO_HEARTBEAT_GLOW:
+        updateHeartbeat();
+        break;
     case NEO_IDLE_BREATHING:
-    default: updateBreathing(); break;
+    default:
+        updateBreathing();
+        break;
     }
 }
 

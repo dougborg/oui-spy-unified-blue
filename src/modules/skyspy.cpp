@@ -1,7 +1,7 @@
 #include "skyspy.h"
+#include "../hal/board.h"
 #include "../hal/led.h"
 #include "../hal/notify.h"
-#include "../hal/board.h"
 #include "../hal/wifi_mgr.h"
 #include "../web/routes.h"
 #include "../web/ws_broadcast.h"
